@@ -1,0 +1,24 @@
+[submodule "deps/zs_imgui_node_editor"]
+	path = deps/zs_imgui_node_editor
+	url = https://github.com/littlemine/imgui-node-editor.git
+[submodule "deps/zs_imguizmo"]
+	path = deps/zs_imguizmo
+	url = https://github.com/littlemine/ImGuizmo.git
+[submodule "deps/imgui"]
+	path = deps/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "deps/imgui_file_dialog"]
+	path = deps/imgui_file_dialog
+	url = https://github.com/aiekick/ImGuiFileDialog.git
+[submodule "deps/imgui_fonts"]
+	path = deps/imgui_fonts
+	url = https://github.com/juliettef/IconFontCppHeaders.git
+[submodule "deps/glfw"]
+	path = deps/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "deps/imgui_notify"]
+	path = deps/imgui_notify
+	url = https://github.com/TyomaVader/ImGuiNotify.git
+[submodule "deps/world"]
+	path = deps/world
+	url = https://github.com/zenustech/zs-world
