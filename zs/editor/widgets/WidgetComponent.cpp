@@ -1,0 +1,25 @@
+#include "WidgetComponent.hpp"
+
+#include "IconsMaterialDesign.h"
+#include "IconsMaterialDesignIcons.h"
+#include "IconsMaterialSymbols.h"
+
+namespace zs {
+
+  /// AssetEntry
+  const char* AssetEntry::getDisplayLabel() const {
+    const char* label = (const char*)ICON_MDI_FILE;
+    switch (_type) {
+      case type_e::text_:
+        label = (const char*)ICON_MD_SOURCE;
+        break;
+      case type_e::usd_:
+        label = (const char*)ICON_MS_SCENE;
+        break;
+      default:
+        break;
+    }
+    return label;
+  }
+
+}  // namespace zs
