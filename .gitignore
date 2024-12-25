@@ -3,3 +3,4 @@ build/
 .cache/
 zs-gui.ini
 ___editor_content.py
+.vs/

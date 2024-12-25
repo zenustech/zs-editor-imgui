@@ -157,6 +157,10 @@ target_link_libraries(zs_editor_imgui PUBLIC
 	zs_world 
 	tinygltf utf8cpp ImGuiFileDialog imfont
 )
+find_package(Boost REQUIRED COMPONENTS process)
+target_link_libraries(zs_editor_imgui PRIVATE
+	Boost::process
+)
 
 target_compile_features(zs_editor_imgui PUBLIC cxx_std_20)
 

@@ -1,10 +1,11 @@
 #include "SceneEditor.hpp"
 
-#include "ImGuizmo.h"
+#define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtc/type_ptr.hpp"
 #include "glm/gtx/euler_angles.hpp"
 #include "glm/gtx/matrix_decompose.hpp"
 #include "imgui.h"
+#include "ImGuizmo.h"
 #include "editor/widgets/TreeWidgetComponent.hpp"
 #include "world/World.hpp"
 #include "world/system/ZsExecSystem.hpp"
