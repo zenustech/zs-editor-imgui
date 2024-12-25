@@ -45,6 +45,7 @@ endif()
 ###########
 
 # glfw
+set(GLFW_LIBRARY_TYPE STATIC)
 add_subdirectory(deps/glfw EXCLUDE_FROM_ALL)
 
 # imgui specific
