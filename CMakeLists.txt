@@ -170,6 +170,6 @@ target_link_libraries(zs_editor_imgui PRIVATE zpc_jit_py)
 
 execute_process(
   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/resource
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/zs/editor/scripts ${CMAKE_BINARY_DIR}/resource
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/zs/editor/scripts ${CMAKE_BINARY_DIR}/resource/scripts
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/zs/editor/shaders ${CMAKE_BINARY_DIR}/resource/shaders
 )

@@ -59,6 +59,7 @@ namespace zs {
 
     std::map<u32, void *> _fonts;
     std::map<std::string, GraphEditor> _editors;
+    std::string _configFile;
     float _fontSize;
     bool _initialized;
   };

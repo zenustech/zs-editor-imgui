@@ -1,0 +1,1 @@
+g = zpy.ui.graph("Editor")

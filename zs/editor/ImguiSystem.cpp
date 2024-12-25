@@ -92,7 +92,8 @@ namespace zs {
     return instance().renameNodeEditor(oldTag, newTag);
   }
 
-  ImguiSystem::ImguiSystem() : _fontSize{20}, _initialized{true} {
+  ImguiSystem::ImguiSystem()
+      : _fontSize{20}, _initialized{true}, _configFile{zs::abs_exe_directory() + "/zs-gui.ini"} {
     static_assert(sizeof(ImWchar) == sizeof(u32), "ImWchar is supposed to be 32-bit!");
 
     ImGui::CreateContext();
@@ -147,7 +148,7 @@ namespace zs {
     // io.DisplayFramebufferScale = ImVec2(dpiScale, dpiScale);
     io.ConfigWindowsMoveFromTitleBarOnly = true;
 
-    io.IniFilename = "zs-gui.ini";
+    io.IniFilename = _configFile.c_str();
 
     /// @note config imgui key/mouse
     io.KeyRepeatDelay = 0.400f;
