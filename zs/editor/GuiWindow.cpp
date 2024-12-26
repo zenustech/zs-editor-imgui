@@ -347,7 +347,7 @@ namespace zs {
   }
 
   GUIWindow::~GUIWindow() {
-#if ZPC_USD_ENABLED
+#if ZS_ENABLE_USD
     ResourceSystem::save_usd();
 #endif
     /// vulkan

@@ -310,7 +310,7 @@ namespace zs {
 
   /// utils
   void close_usd_asset(std::string_view label) {
-#if ZPC_USD_ENABLED
+#if ZS_ENABLE_USD
     ResourceSystem::close_usd(std::string{label});
 #endif
   }

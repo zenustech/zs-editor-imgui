@@ -4,18 +4,18 @@
 #include "GuiWindow.hpp"
 #include "IconsMaterialDesign.h"
 #include "ImGuiFileDialog.h"
-#include "imgui.h"
-#include "interface/world/value_type/ValueInterface.hpp"
 #include "editor/widgets/AssetBrowserComponent.hpp"
 #include "editor/widgets/DetailWidgetComponent.hpp"
 #include "editor/widgets/TreeWidgetComponent.hpp"
 #include "editor/widgets/WidgetComponent.hpp"
 #include "editor/widgets/utilities/parser.hpp"
+#include "imgui.h"
+#include "interface/world/value_type/ValueInterface.hpp"
 // #include "subprocess.h" // this is useless
 
-#include "interface/details/PyHelper.hpp"
 #include "editor/widgets/ResourceWidgetComponent.hpp"
 #include "editor/widgets/SequencerComponent.hpp"
+#include "interface/details/PyHelper.hpp"
 #include "world/system/ResourceSystem.hpp"
 
 /// @note goto https://fonts.google.com/icons?icon.size=24&icon.color=%235f6368 for icon overview
@@ -168,7 +168,7 @@ namespace zs {
                   std::string filePath = ImGuiFileDialog::Instance()->GetCurrentPath();
           // action
           // fmt::print("selected {} at {}\n", filePathName, filePath);
-#if ZPC_USD_ENABLED
+#if ZS_ENABLE_USD
                   auto label = std::filesystem::path(filePathName).stem().string();
                   auto scene = ResourceSystem::load_usd(filePathName, /*label*/ label);
                   ResourceSystem::register_widget(

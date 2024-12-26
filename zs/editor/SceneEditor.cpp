@@ -494,13 +494,14 @@ void main()
 
     // loadGrid();
 
-#if ZPC_USD_ENABLED
-    auto defaultScene = ResourceSystem::load_usd(g_defaultUsdFile, g_defaultUsdLabel);
+#if ZS_ENABLE_USD
+    auto fn = abs_exe_directory() + "/resource/usd/" + g_defaultUsdFile;
+    auto defaultScene = ResourceSystem::load_usd(fn, g_defaultUsdLabel);
     ResourceSystem::register_widget(
         /*label*/ g_defaultUsdLabel, ui::build_usd_tree_node(defaultScene->getRootPrim().get()));
 #endif
 
-#if ZPC_USD_ENABLED
+#if ZS_ENABLE_USD
     // loadSampleScene();
     // loadUVTestScene();
 #endif

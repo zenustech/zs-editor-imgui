@@ -47,7 +47,7 @@ namespace zs {
     ///
     ///
     void UsdTreeNode::onDelete(std::string_view path) {
-#if ZPC_USD_ENABLED
+#if ZS_ENABLE_USD
       fmt::print("deleted [{}] of scene [{}] ({})\n", _path, _scene->getName(), _sceneName);
       auto ret = ResourceSystem::get_usd(_sceneName)->removePrim(path.data());
       fmt::print("retrieved scene name {}, deletion success: {}\n",
@@ -238,14 +238,14 @@ namespace zs {
       /// setup tab maintenance ops
       _tabs.setLeadingSymbolLiteral((const char*)ICON_MD_LIST);
       _tabs.setInsertionCallback([](std::string_view label, Meta& meta) {
-#if ZPC_USD_ENABLED
+#if ZS_ENABLE_USD
         meta._scene = ResourceSystem::get_usd(label);
 #else
         meta._scene = nullptr;
 #endif
       });
       _tabs.setRemovalCallback([](std::string_view label, Meta& meta) {
-#if ZPC_USD_ENABLED
+#if ZS_ENABLE_USD
         if (label == g_defaultUsdLabel) {  // default usd file is always saved upon removal
           ResourceSystem::save_usd(g_defaultUsdLabel);
         }
@@ -253,21 +253,21 @@ namespace zs {
 #endif
       });
       _tabs.setIsValidPredicate([](std::string_view label) -> bool {
-#if ZPC_USD_ENABLED
+#if ZS_ENABLE_USD
         return ResourceSystem::has_usd(std::string{label});
 #else
         return true;
 #endif
       });
       _tabs.setIsModifiedPredicate([](std::string_view label) -> bool {
-#if ZPC_USD_ENABLED
+#if ZS_ENABLE_USD
         return ResourceSystem::usd_modified(std::string{label});
 #else
         return false;
 #endif
       });
       _tabs.setSaveCallback([](std::string_view label) -> void {
-#if ZPC_USD_ENABLED
+#if ZS_ENABLE_USD
         ResourceSystem::save_usd(label);
 #endif
       });
@@ -279,7 +279,7 @@ namespace zs {
       /// as in AssetBrowser, monitor usd file changes
       ResourceSystem::onUsdFilesChanged().connect([](const std::vector<std::string>& labels) {
         for (auto& label : labels) {
-#if ZPC_USD_ENABLED
+#if ZS_ENABLE_USD
           fmt::print("rebuilding usd scene [{}] widget!\n", label);
           auto root = ResourceSystem::get_usd(label)->getRootPrim();
           // auto root = ResourceSystem::get_usd(label)->getPrim("/");
