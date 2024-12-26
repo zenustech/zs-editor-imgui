@@ -1,11 +1,12 @@
 #include "SceneEditor.hpp"
 
 // Weighted Order-Independent Transparency
-// ref: Morgan McGuire and Louis Bavoil, Weighted Blended Order-Independent Transparency, Journal of Computer Graphics Techniques (JCGT), vol. 2, no. 2, 122-141, 2013
+// ref: Morgan McGuire and Louis Bavoil, Weighted Blended Order-Independent Transparency, Journal of
+// Computer Graphics Techniques (JCGT), vol. 2, no. 2, 122-141, 2013
 // https://jcgt.org/published/0002/02/09/
 
 namespace zs {
-	static const char g_blend_mesh_vert_code[] = R"(
+  static const char g_blend_mesh_vert_code[] = R"(
 #version 450
 
 layout (location = 0) in vec3 inPos;
@@ -78,7 +79,7 @@ void main()
 	outDiv = vec4(alpha * weight, 0.0, 0.0, 0.0);
 }
 )";
-	static const char g_post_blend_vert_code[] = R"(
+  static const char g_post_blend_vert_code[] = R"(
 #version 450
 
 const vec2 positions[4] = {
@@ -102,7 +103,7 @@ void main() {
 	outUV = UVs[gl_VertexIndex];
 }
 )";
-	static const char g_post_blend_frag_code[] = R"(
+  static const char g_post_blend_frag_code[] = R"(
 #version 450
 
 layout (location = 0) in vec2 inUV;
@@ -118,288 +119,299 @@ void main() {
 }
 )";
 
-	void SceneEditor::setupOITResources() {
-		auto& ctx = this->ctx();
+  void SceneEditor::setupOITResources() {
+    auto& ctx = this->ctx();
 
-		sceneOITRenderer.sampler
-			= ctx.createSampler(vk::SamplerCreateInfo{}
-			.setMaxAnisotropy(1.f)
-			.setMagFilter(vk::Filter::eNearest)
-			.setMinFilter(vk::Filter::eNearest)
-			.setMipmapMode(vk::SamplerMipmapMode::eNearest)
-			.setAddressModeU(vk::SamplerAddressMode::eClampToBorder)
-			.setAddressModeV(vk::SamplerAddressMode::eClampToBorder)
-			.setAddressModeW(vk::SamplerAddressMode::eClampToBorder)
-			.setCompareOp(vk::CompareOp::eNever)
-			.setBorderColor(vk::BorderColor::eFloatTransparentBlack));
+    sceneOITRenderer.sampler
+        = ctx.createSampler(vk::SamplerCreateInfo{}
+                                .setMaxAnisotropy(1.f)
+                                .setMagFilter(vk::Filter::eNearest)
+                                .setMinFilter(vk::Filter::eNearest)
+                                .setMipmapMode(vk::SamplerMipmapMode::eNearest)
+                                .setAddressModeU(vk::SamplerAddressMode::eClampToBorder)
+                                .setAddressModeV(vk::SamplerAddressMode::eClampToBorder)
+                                .setAddressModeW(vk::SamplerAddressMode::eClampToBorder)
+                                .setCompareOp(vk::CompareOp::eNever)
+                                .setBorderColor(vk::BorderColor::eFloatTransparentBlack));
 
-		ResourceSystem::load_shader(ctx, "accum_blend_vert", vk::ShaderStageFlagBits::eVertex, g_blend_mesh_vert_code);
-		ResourceSystem::load_shader(ctx, "accum_blend_frag", vk::ShaderStageFlagBits::eFragment, g_blend_mesh_frag_code);
-		ResourceSystem::load_shader(ctx, "post_blend_vert", vk::ShaderStageFlagBits::eVertex, g_post_blend_vert_code);
-		ResourceSystem::load_shader(ctx, "post_blend_frag", vk::ShaderStageFlagBits::eFragment, g_post_blend_frag_code);
+    ResourceSystem::load_shader(ctx, "accum_blend_vert", vk::ShaderStageFlagBits::eVertex,
+                                g_blend_mesh_vert_code);
+    ResourceSystem::load_shader(ctx, "accum_blend_frag", vk::ShaderStageFlagBits::eFragment,
+                                g_blend_mesh_frag_code);
+    ResourceSystem::load_shader(ctx, "post_blend_vert", vk::ShaderStageFlagBits::eVertex,
+                                g_post_blend_vert_code);
+    ResourceSystem::load_shader(ctx, "post_blend_frag", vk::ShaderStageFlagBits::eFragment,
+                                g_post_blend_frag_code);
 
-		auto& blendVertShader = ResourceSystem::get_shader("accum_blend_vert");
-		auto& blendFragShader = ResourceSystem::get_shader("accum_blend_frag");
-		auto& postBlendVertShader = ResourceSystem::get_shader("post_blend_vert");
-		auto& postBlendFragShader = ResourceSystem::get_shader("post_blend_frag");
-		ctx.acquireSet(postBlendFragShader.layout(0), sceneOITRenderer.accumImageDescriptorSet);
+    auto& blendVertShader = ResourceSystem::get_shader("accum_blend_vert");
+    auto& blendFragShader = ResourceSystem::get_shader("accum_blend_frag");
+    auto& postBlendVertShader = ResourceSystem::get_shader("post_blend_vert");
+    auto& postBlendFragShader = ResourceSystem::get_shader("post_blend_frag");
+    ctx.acquireSet(postBlendFragShader.layout(0), sceneOITRenderer.accumImageDescriptorSet);
 
-		// accumulate render pass
-		{
-			auto rpBuilder = ctx.renderpass().setNumPasses(1);
-			rpBuilder
-				.addAttachment(depthFormat, vk::ImageLayout::eDepthStencilAttachmentOptimal,
-				vk::ImageLayout::eDepthStencilAttachmentOptimal, false, vk::SampleCountFlagBits::e1)
-				.addAttachment(vk::Format::eR32G32B32A32Sfloat, vk::ImageLayout::eUndefined,
-				vk::ImageLayout::eShaderReadOnlyOptimal, true, vk::SampleCountFlagBits::e1)
-				.addAttachment(colorFormat, vk::ImageLayout::eUndefined,
-				vk::ImageLayout::eShaderReadOnlyOptimal, true, vk::SampleCountFlagBits::e1)
-				.addSubpass({ 1, 2 }, /*depthStencilRef*/ 0, /*colorResolveRef*/{},
-				/*depthStencilResolveRef*/ -1, /*inputAttachments*/{});
-			rpBuilder.setSubpassDependencies(
-				{ vk::SubpassDependency2{}
-							.setSrcSubpass(VK_SUBPASS_EXTERNAL)
-							.setDstSubpass(0)
-							.setSrcAccessMask(vk::AccessFlagBits::eMemoryRead)
-							.setDstAccessMask(vk::AccessFlagBits::eColorAttachmentRead
-																| vk::AccessFlagBits::eColorAttachmentWrite)
-							.setSrcStageMask(vk::PipelineStageFlagBits::eBottomOfPipe)
-							.setDstStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
-							.setDependencyFlags(vk::DependencyFlagBits::eByRegion),
-					vk::SubpassDependency2{}
-							.setSrcSubpass(0)
-							.setDstSubpass(VK_SUBPASS_EXTERNAL)
-							.setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentRead
-																| vk::AccessFlagBits::eColorAttachmentWrite)
-							.setDstAccessMask(vk::AccessFlagBits::eMemoryRead)
-							.setSrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
-							.setDstStageMask(vk::PipelineStageFlagBits::eBottomOfPipe)
-							.setDependencyFlags(vk::DependencyFlagBits::eByRegion)
-				});
-			sceneOITRenderer.accumRenderPass = rpBuilder.build();
-		}
+    // accumulate render pass
+    {
+      auto rpBuilder = ctx.renderpass().setNumPasses(1);
+      rpBuilder
+          .addAttachment(depthFormat,  // vk::ImageLayout::eDepthStencilAttachmentOptimal,
+                         vk::ImageLayout::eShaderReadOnlyOptimal,  // see [sceneRenderer.renderPass
+                                                                   // :: attachment 3]
+                         vk::ImageLayout::eDepthStencilReadOnlyOptimal, false,
+                         vk::SampleCountFlagBits::e1)
+          .addAttachment(vk::Format::eR32G32B32A32Sfloat, vk::ImageLayout::eUndefined,
+                         vk::ImageLayout::eShaderReadOnlyOptimal, true, vk::SampleCountFlagBits::e1)
+          .addAttachment(colorFormat, vk::ImageLayout::eUndefined,
+                         vk::ImageLayout::eShaderReadOnlyOptimal, true, vk::SampleCountFlagBits::e1)
+          .addSubpass({1, 2}, /*depthStencilRef*/ 0, /*colorResolveRef*/ {},
+                      /*depthStencilResolveRef*/ -1, /*inputAttachments*/ {});
+      rpBuilder.setSubpassDependencies(
+          {vk::SubpassDependency2{}
+               .setSrcSubpass(VK_SUBPASS_EXTERNAL)
+               .setDstSubpass(0)
+               .setSrcAccessMask(vk::AccessFlagBits::eMemoryRead)
+               .setDstAccessMask(vk::AccessFlagBits::eColorAttachmentRead
+                                 | vk::AccessFlagBits::eColorAttachmentWrite)
+               .setSrcStageMask(vk::PipelineStageFlagBits::eBottomOfPipe)
+               .setDstStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
+               .setDependencyFlags(vk::DependencyFlagBits::eByRegion),
+           vk::SubpassDependency2{}
+               .setSrcSubpass(0)
+               .setDstSubpass(VK_SUBPASS_EXTERNAL)
+               .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentRead
+                                 | vk::AccessFlagBits::eColorAttachmentWrite)
+               .setDstAccessMask(vk::AccessFlagBits::eMemoryRead)
+               .setSrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
+               .setDstStageMask(vk::PipelineStageFlagBits::eBottomOfPipe)
+               .setDependencyFlags(vk::DependencyFlagBits::eByRegion)});
+      sceneOITRenderer.accumRenderPass = rpBuilder.build();
+    }
 
-		// post blend pass
-		{
-			auto rpBuilder = ctx.renderpass().setNumPasses(1);
-			rpBuilder
-				.addAttachment(colorFormat, vk::ImageLayout::eShaderReadOnlyOptimal,
-				vk::ImageLayout::eShaderReadOnlyOptimal, false, vk::SampleCountFlagBits::e1)
-				.addSubpass({ 0 }, /*depthStencilRef*/ -1, /*colorResolveRef*/{},
-				/*depthStencilResolveRef*/ -1, /*inputAttachments*/{});
-			rpBuilder.setSubpassDependencies(
-				{ vk::SubpassDependency2{}
-							.setSrcSubpass(VK_SUBPASS_EXTERNAL)
-							.setDstSubpass(0)
-							.setSrcAccessMask(vk::AccessFlagBits::eMemoryRead)
-							.setDstAccessMask(vk::AccessFlagBits::eColorAttachmentRead
-																| vk::AccessFlagBits::eColorAttachmentWrite)
-							.setSrcStageMask(vk::PipelineStageFlagBits::eBottomOfPipe)
-							.setDstStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
-							.setDependencyFlags(vk::DependencyFlagBits::eByRegion),
-					vk::SubpassDependency2{}
-							.setSrcSubpass(0)
-							.setDstSubpass(VK_SUBPASS_EXTERNAL)
-							.setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentRead
-																| vk::AccessFlagBits::eColorAttachmentWrite)
-							.setDstAccessMask(vk::AccessFlagBits::eMemoryRead)
-							.setSrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
-							.setDstStageMask(vk::PipelineStageFlagBits::eBottomOfPipe)
-							.setDependencyFlags(vk::DependencyFlagBits::eByRegion)
-				});
-			sceneOITRenderer.postRenderPass = rpBuilder.build();
-		}
-		
-		sceneOITRenderer.accumPipeline
-			= ctx.pipeline()
-			.setRenderPass(sceneOITRenderer.accumRenderPass.get(), 0)
-			.setRasterizationSamples(vk::SampleCountFlagBits::e1)
-			.setCullMode(vk::CullModeFlagBits::eBack)
-			.setTopology(vk::PrimitiveTopology::eTriangleList)
-			.setDepthTestEnable(true)
-			.setDepthWriteEnable(false)
-			.setDepthCompareOp(SceneEditor::reversedZ ? vk::CompareOp::eGreaterOrEqual
-			: vk::CompareOp::eLessOrEqual)
-			.setBlendEnable(true)
-			.setColorBlendOp(vk::BlendOp::eAdd, 0)
-			.setColorBlendFactor(vk::BlendFactor::eOne, vk::BlendFactor::eOne, 0)
-			.setColorBlendOp(vk::BlendOp::eAdd, 1)
-			.setColorBlendFactor(vk::BlendFactor::eOne, vk::BlendFactor::eOne, 1)
-			.setAlphaBlendOp(vk::BlendOp::eAdd)
-			.setAlphaBlendFactor(vk::BlendFactor::eZero, vk::BlendFactor::eOneMinusSrcAlpha)
-			.setShader(blendVertShader)
-			.setShader(blendFragShader)
-			.setPushConstantRanges(
-			{ vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4)} })
-			.setBindingDescriptions(VkModel::get_binding_descriptions_normal_color(VkModel::tri))
-			.setAttributeDescriptions(VkModel::get_attribute_descriptions_normal_color(VkModel::tri))
-			.build();
+    // post blend pass
+    {
+      auto rpBuilder = ctx.renderpass().setNumPasses(1);
+      rpBuilder
+          .addAttachment(colorFormat, vk::ImageLayout::eShaderReadOnlyOptimal,
+                         vk::ImageLayout::eShaderReadOnlyOptimal, false,
+                         vk::SampleCountFlagBits::e1)
+          .addSubpass({0}, /*depthStencilRef*/ -1, /*colorResolveRef*/ {},
+                      /*depthStencilResolveRef*/ -1, /*inputAttachments*/ {});
+      rpBuilder.setSubpassDependencies(
+          {vk::SubpassDependency2{}
+               .setSrcSubpass(VK_SUBPASS_EXTERNAL)
+               .setDstSubpass(0)
+               .setSrcAccessMask(vk::AccessFlagBits::eMemoryRead)
+               .setDstAccessMask(vk::AccessFlagBits::eColorAttachmentRead
+                                 | vk::AccessFlagBits::eColorAttachmentWrite)
+               .setSrcStageMask(vk::PipelineStageFlagBits::eBottomOfPipe)
+               .setDstStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
+               .setDependencyFlags(vk::DependencyFlagBits::eByRegion),
+           vk::SubpassDependency2{}
+               .setSrcSubpass(0)
+               .setDstSubpass(VK_SUBPASS_EXTERNAL)
+               .setSrcAccessMask(vk::AccessFlagBits::eColorAttachmentRead
+                                 | vk::AccessFlagBits::eColorAttachmentWrite)
+               .setDstAccessMask(vk::AccessFlagBits::eMemoryRead)
+               .setSrcStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput)
+               .setDstStageMask(vk::PipelineStageFlagBits::eBottomOfPipe)
+               .setDependencyFlags(vk::DependencyFlagBits::eByRegion)});
+      sceneOITRenderer.postRenderPass = rpBuilder.build();
+    }
 
-		sceneOITRenderer.postPipeline
-			= ctx.pipeline()
-			.setRenderPass(sceneOITRenderer.postRenderPass.get(), 0)
-			.setRasterizationSamples(vk::SampleCountFlagBits::e1)
-			.setCullMode(vk::CullModeFlagBits::eBack)
-			.setTopology(vk::PrimitiveTopology::eTriangleFan)
-			.setDepthWriteEnable(false)
-			.setDepthTestEnable(false)
-			.setBlendEnable(true)
-			.setColorBlendOp(vk::BlendOp::eAdd)
-			.setColorBlendFactor(vk::BlendFactor::eSrcAlpha, vk::BlendFactor::eOneMinusSrcAlpha)
-			.setAlphaBlendOp(vk::BlendOp::eAdd)
-			.setAlphaBlendFactor(vk::BlendFactor::eSrcAlpha, vk::BlendFactor::eOneMinusSrcAlpha)
-			.setShader(postBlendVertShader)
-			.setShader(postBlendFragShader)
-			.build();
+    sceneOITRenderer.accumPipeline
+        = ctx.pipeline()
+              .setRenderPass(sceneOITRenderer.accumRenderPass.get(), 0)
+              .setRasterizationSamples(vk::SampleCountFlagBits::e1)
+              .setCullMode(vk::CullModeFlagBits::eBack)
+              .setTopology(vk::PrimitiveTopology::eTriangleList)
+              .setDepthTestEnable(true)
+              .setDepthWriteEnable(false)
+              .setDepthCompareOp(SceneEditor::reversedZ ? vk::CompareOp::eGreaterOrEqual
+                                                        : vk::CompareOp::eLessOrEqual)
+              .setBlendEnable(true)
+              .setColorBlendOp(vk::BlendOp::eAdd, 0)
+              .setColorBlendFactor(vk::BlendFactor::eOne, vk::BlendFactor::eOne, 0)
+              .setColorBlendOp(vk::BlendOp::eAdd, 1)
+              .setColorBlendFactor(vk::BlendFactor::eOne, vk::BlendFactor::eOne, 1)
+              .setAlphaBlendOp(vk::BlendOp::eAdd)
+              .setAlphaBlendFactor(vk::BlendFactor::eZero, vk::BlendFactor::eOneMinusSrcAlpha)
+              .setShader(blendVertShader)
+              .setShader(blendFragShader)
+              .setPushConstantRanges(
+                  {vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4)}})
+              .setBindingDescriptions(VkModel::get_binding_descriptions_normal_color(VkModel::tri))
+              .setAttributeDescriptions(
+                  VkModel::get_attribute_descriptions_normal_color(VkModel::tri))
+              .build();
 
-		rebuildOITFBO();
-	}
+    sceneOITRenderer.postPipeline
+        = ctx.pipeline()
+              .setRenderPass(sceneOITRenderer.postRenderPass.get(), 0)
+              .setRasterizationSamples(vk::SampleCountFlagBits::e1)
+              .setCullMode(vk::CullModeFlagBits::eBack)
+              .setTopology(vk::PrimitiveTopology::eTriangleFan)
+              .setDepthWriteEnable(false)
+              .setDepthTestEnable(false)
+              .setBlendEnable(true)
+              .setColorBlendOp(vk::BlendOp::eAdd)
+              .setColorBlendFactor(vk::BlendFactor::eSrcAlpha, vk::BlendFactor::eOneMinusSrcAlpha)
+              .setAlphaBlendOp(vk::BlendOp::eAdd)
+              .setAlphaBlendFactor(vk::BlendFactor::eSrcAlpha, vk::BlendFactor::eOneMinusSrcAlpha)
+              .setShader(postBlendVertShader)
+              .setShader(postBlendFragShader)
+              .build();
 
-	void SceneEditor::rebuildOITFBO() {
-		sceneOITRenderer.accumImage0
-			= ctx().create2DImage(viewportPanelSize, vk::Format::eR32G32B32A32Sfloat,
-			/* combined image sampler */ vk::ImageUsageFlagBits::eSampled |
-			vk::ImageUsageFlagBits::eStorage |
-			vk::ImageUsageFlagBits::eColorAttachment |
-			/* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
-		sceneOITRenderer.accumImage1
-			= ctx().create2DImage(viewportPanelSize, colorFormat,
-			/* combined image sampler */ vk::ImageUsageFlagBits::eSampled |
-			vk::ImageUsageFlagBits::eStorage |
-			vk::ImageUsageFlagBits::eColorAttachment |
-			/* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
+    rebuildOITFBO();
+  }
 
-		sceneOITRenderer.accumFBO = ctx().createFramebuffer(
-			{ (vk::ImageView)sceneAttachments.depth.get(),
-				(vk::ImageView)sceneOITRenderer.accumImage0.get(),
-				(vk::ImageView)sceneOITRenderer.accumImage1.get(),
-			},
-			viewportPanelSize, sceneOITRenderer.accumRenderPass.get()
-		);
-		sceneOITRenderer.postFBO = ctx().createFramebuffer(
-			{ (vk::ImageView)sceneAttachments.color.get() },
-			viewportPanelSize, sceneOITRenderer.postRenderPass.get()
-		);
+  void SceneEditor::rebuildOITFBO() {
+    sceneOITRenderer.accumImage0 = ctx().create2DImage(
+        viewportPanelSize, vk::Format::eR32G32B32A32Sfloat,
+        /* combined image sampler */ vk::ImageUsageFlagBits::eSampled
+            | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eColorAttachment |
+            /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
+    sceneOITRenderer.accumImage1 = ctx().create2DImage(
+        viewportPanelSize, colorFormat,
+        /* combined image sampler */ vk::ImageUsageFlagBits::eSampled
+            | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eColorAttachment |
+            /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
 
-		vk::DescriptorImageInfo imageInfo{};
-		imageInfo.sampler = sceneOITRenderer.sampler.get();
-		imageInfo.imageView = sceneOITRenderer.accumImage0.get();
-		imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-		ctx().writeDescriptorSet(imageInfo, sceneOITRenderer.accumImageDescriptorSet,
-			vk::DescriptorType::eCombinedImageSampler,
-			/*binding*/ 0);
+    sceneOITRenderer.accumFBO = ctx().createFramebuffer(
+        {
+            (vk::ImageView)sceneAttachments.depth.get(),
+            (vk::ImageView)sceneOITRenderer.accumImage0.get(),
+            (vk::ImageView)sceneOITRenderer.accumImage1.get(),
+        },
+        viewportPanelSize, sceneOITRenderer.accumRenderPass.get());
+    sceneOITRenderer.postFBO
+        = ctx().createFramebuffer({(vk::ImageView)sceneAttachments.color.get()}, viewportPanelSize,
+                                  sceneOITRenderer.postRenderPass.get());
 
-		imageInfo.imageView = sceneOITRenderer.accumImage1.get();
-		imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-		ctx().writeDescriptorSet(imageInfo, sceneOITRenderer.accumImageDescriptorSet,
-			vk::DescriptorType::eCombinedImageSampler,
-			/*binding*/ 1);
-	}
+    vk::DescriptorImageInfo imageInfo{};
+    imageInfo.sampler = sceneOITRenderer.sampler.get();
+    imageInfo.imageView = sceneOITRenderer.accumImage0.get();
+    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    ctx().writeDescriptorSet(imageInfo, sceneOITRenderer.accumImageDescriptorSet,
+                             vk::DescriptorType::eCombinedImageSampler,
+                             /*binding*/ 0);
 
-	void SceneEditor::renderTransparent() {
-		auto& ctx = this->ctx();
-		fence.get().wait();
-		auto& cmd = this->cmd.get();
-		cmd.begin();
+    imageInfo.imageView = sceneOITRenderer.accumImage1.get();
+    imageInfo.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+    ctx().writeDescriptorSet(imageInfo, sceneOITRenderer.accumImageDescriptorSet,
+                             vk::DescriptorType::eCombinedImageSampler,
+                             /*binding*/ 1);
+  }
 
-		// render accumulation
-		{
-			vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), viewportPanelSize);
-			std::array<vk::ClearValue, 3> clearValues{};
-			clearValues[1].color = vk::ClearColorValue{ std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f} };
-			clearValues[2].color = vk::ClearColorValue{ std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f} };
-			auto renderPassInfo = vk::RenderPassBeginInfo()
-				.setRenderPass(sceneOITRenderer.accumRenderPass.get())
-				.setFramebuffer(sceneOITRenderer.accumFBO.get())
-				.setRenderArea(rect)
-				.setClearValueCount((zs::u32)clearValues.size())
-				.setPClearValues(clearValues.data());
-			(*cmd).beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+  void SceneEditor::renderTransparent() {
+    auto& ctx = this->ctx();
+    fence.get().wait();
+    auto& cmd = this->cmd.get();
+    cmd.begin();
 
-			auto viewport
-				= vk::Viewport()
-				.setX(0 /*offsetx*/)
-				.setY(viewportPanelSize.height /*-offsety*/)
-				.setWidth(float(viewportPanelSize.width))
-				.setHeight(-float(viewportPanelSize.height))  // negative viewport, opengl conformant
-				.setMinDepth(0.0f)
-				.setMaxDepth(1.0f);
-			(*cmd).setViewport(0, { viewport });
-			(*cmd).setScissor(0, { vk::Rect2D(vk::Offset2D(), viewportPanelSize) });
+#if 0
+    auto imageBarrier = image_layout_transition_barrier(
+        sceneAttachments.depth.get(), vk::ImageAspectFlagBits::eDepth, vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eeDepthStencilAttachmentOptimal,
+        vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eEarlyFragmentTests);
+    cmd.pipelineBarrier(vk::PipelineStageFlagBits::eHost, vk::PipelineStageFlagBits::eTransfer,
+                        vk::DependencyFlags(), {}, {}, {imageBarrier}, ctx.dispatcher);
+#endif
+    // render accumulation
+    {
+      vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), viewportPanelSize);
+      std::array<vk::ClearValue, 3> clearValues{};
+      clearValues[1].color = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
+      clearValues[2].color = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f}};
+      auto renderPassInfo = vk::RenderPassBeginInfo()
+                                .setRenderPass(sceneOITRenderer.accumRenderPass.get())
+                                .setFramebuffer(sceneOITRenderer.accumFBO.get())
+                                .setRenderArea(rect)
+                                .setClearValueCount((zs::u32)clearValues.size())
+                                .setPClearValues(clearValues.data());
+      (*cmd).beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
 
-			for (const auto& primPtr : getCurrentVisiblePrims()) {
-				// auto prim = primPtr.lock();
-				auto& prim = primPtr;
-				if (prim->details().refIsOpaque()) continue;
-				if (!currentVisiblePrimsDrawn[prim]) continue;
-				const auto& transform = prim->currentTimeVisualTransform();
-				auto pModel = prim->queryVkTriMesh(ctx, sceneRenderData.currentTimeCode);
-				const auto& model = *pModel;
+      auto viewport = vk::Viewport()
+                          .setX(0 /*offsetx*/)
+                          .setY(viewportPanelSize.height /*-offsety*/)
+                          .setWidth(float(viewportPanelSize.width))
+                          .setHeight(-float(
+                              viewportPanelSize.height))  // negative viewport, opengl conformant
+                          .setMinDepth(0.0f)
+                          .setMaxDepth(1.0f);
+      (*cmd).setViewport(0, {viewport});
+      (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), viewportPanelSize)});
 
-				if (model.isParticle()) {
-					(*cmd).bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-						/*pipeline layout*/ sceneRenderer.pointTransparentPipeline.get(),
-						/*firstSet*/ 0,
-						/*descriptor sets*/{ sceneRenderData.sceneCameraSet },
-						/*dynamic offset*/{ 0 }, ctx.dispatcher);
-					// use ubo instead of push constant for camera
+      for (const auto& primPtr : getCurrentVisiblePrims()) {
+        // auto prim = primPtr.lock();
+        auto& prim = primPtr;
+        if (prim->details().refIsOpaque()) continue;
+        if (!currentVisiblePrimsDrawn[prim]) continue;
+        const auto& transform = prim->currentTimeVisualTransform();
+        auto pModel = prim->queryVkTriMesh(ctx, sceneRenderData.currentTimeCode);
+        const auto& model = *pModel;
 
-					(*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics,
-						sceneRenderer.pointTransparentPipeline.get());
+        if (model.isParticle()) {
+          (*cmd).bindDescriptorSets(
+              vk::PipelineBindPoint::eGraphics,
+              /*pipeline layout*/ sceneRenderer.pointTransparentPipeline.get(),
+              /*firstSet*/ 0,
+              /*descriptor sets*/ {sceneRenderData.sceneCameraSet},
+              /*dynamic offset*/ {0}, ctx.dispatcher);
+          // use ubo instead of push constant for camera
 
-					sceneRenderer.pointVertParams.model = transform;
-					(*cmd).pushConstants(sceneRenderer.pointTransparentPipeline.get(),
-						vk::ShaderStageFlagBits::eVertex, 0,
-						sizeof(sceneRenderer.pointVertParams), &sceneRenderer.pointVertParams);
-					model.bind((*cmd), VkModel::point);
-					model.draw((*cmd), VkModel::point);
-				} else {
-					// const auto &texSet = ResourceSystem::get_texture_descriptor_set(model.texturePath);
-					// use ubo instead of push constant for camera
-					(*cmd).bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-						/*pipeline layout*/ sceneOITRenderer.accumPipeline.get(),
-						/*firstSet*/ 0,
-						/*descriptor sets*/{ sceneRenderData.sceneCameraSet },
-						/*dynamic offset*/{ 0 }, ctx.dispatcher);
+          (*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics,
+                              sceneRenderer.pointTransparentPipeline.get());
 
-					(*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics,
-						sceneOITRenderer.accumPipeline.get());
+          sceneRenderer.pointVertParams.model = transform;
+          (*cmd).pushConstants(
+              sceneRenderer.pointTransparentPipeline.get(), vk::ShaderStageFlagBits::eVertex, 0,
+              sizeof(sceneRenderer.pointVertParams), &sceneRenderer.pointVertParams);
+          model.bind((*cmd), VkModel::point);
+          model.draw((*cmd), VkModel::point);
+        } else {
+          // const auto &texSet = ResourceSystem::get_texture_descriptor_set(model.texturePath);
+          // use ubo instead of push constant for camera
+          (*cmd).bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                    /*pipeline layout*/ sceneOITRenderer.accumPipeline.get(),
+                                    /*firstSet*/ 0,
+                                    /*descriptor sets*/ {sceneRenderData.sceneCameraSet},
+                                    /*dynamic offset*/ {0}, ctx.dispatcher);
 
-					(*cmd).pushConstants(sceneOITRenderer.accumPipeline.get(),
-						vk::ShaderStageFlagBits::eVertex, 0, sizeof(transform), &transform);
-					model.bindNormalColor((*cmd), VkModel::tri);
-					model.drawNormalColor((*cmd), VkModel::tri);
-				}
-			}
+          (*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics,
+                              sceneOITRenderer.accumPipeline.get());
 
-			(*cmd).endRenderPass();
-		}
-		
-		// post blending
-		{
-			vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), viewportPanelSize);
-			auto renderPassInfo = vk::RenderPassBeginInfo()
-				.setRenderPass(sceneOITRenderer.postRenderPass.get())
-				.setFramebuffer(sceneOITRenderer.postFBO.get())
-				.setRenderArea(rect);
-			(*cmd).beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
+          (*cmd).pushConstants(sceneOITRenderer.accumPipeline.get(),
+                               vk::ShaderStageFlagBits::eVertex, 0, sizeof(transform), &transform);
+          model.bindNormalColor((*cmd), VkModel::tri);
+          model.drawNormalColor((*cmd), VkModel::tri);
+        }
+      }
 
-			(*cmd).bindDescriptorSets(
-				vk::PipelineBindPoint::eGraphics,
-				/*pipeline layout*/ sceneOITRenderer.postPipeline.get(),
-				/*firstSet*/ 0,
-				/*descriptor sets*/{ sceneOITRenderer.accumImageDescriptorSet },
-				/*dynamic offset*/{}, ctx.dispatcher);
-			(*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics,
-				sceneOITRenderer.postPipeline.get());
-			(*cmd).draw(4, 1, 0, 0, ctx.dispatcher);
+      (*cmd).endRenderPass();
+    }
 
-			(*cmd).endRenderPass();
-		}
+    // post blending
+    {
+      vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), viewportPanelSize);
+      auto renderPassInfo = vk::RenderPassBeginInfo()
+                                .setRenderPass(sceneOITRenderer.postRenderPass.get())
+                                .setFramebuffer(sceneOITRenderer.postFBO.get())
+                                .setRenderArea(rect);
+      (*cmd).beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
 
-		(*cmd).end();
-		cmd.submit(fence.get(), /*reset fence*/ true, /*reset config*/ true);
+      (*cmd).bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                                /*pipeline layout*/ sceneOITRenderer.postPipeline.get(),
+                                /*firstSet*/ 0,
+                                /*descriptor sets*/ {sceneOITRenderer.accumImageDescriptorSet},
+                                /*dynamic offset*/ {}, ctx.dispatcher);
+      (*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics, sceneOITRenderer.postPipeline.get());
+      (*cmd).draw(4, 1, 0, 0, ctx.dispatcher);
 
-		fence.get().wait();
-	}
-}
+      (*cmd).endRenderPass();
+    }
+
+    (*cmd).end();
+    cmd.submit(fence.get(), /*reset fence*/ true, /*reset config*/ true);
+
+    fence.get().wait();
+  }
+}  // namespace zs
