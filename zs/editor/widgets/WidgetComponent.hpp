@@ -32,9 +32,38 @@ namespace zs {
     operator const void *() const noexcept { return id; }
     explicit operator ImGuiID() const noexcept { return ImGui::GetCurrentWindow()->GetID(id); }
   };
-  using WidgetComponentElement = Shared<WidgetComponentConcept>;
-  using WidgetElement = Shared<WidgetConcept>;
-  using GenericWidgetElement = std::variant<WidgetElement, WidgetComponentElement>;
+  /// @brief for receiving/issuing/processing events
+  struct GuiEvent {};
+  struct WidgetBase {
+    ;
+    ;
+    // properties
+    // status
+    bool _focused{false}, _hovered{true};
+  };
+  struct LeafWidget : WidgetBase {
+    LeafWidget() = default;
+    LeafWidget(Shared<WidgetComponentConcept> widget) : _widget{widget} {}
+
+    void paint() { _widget->paint(); }
+    auto &refWidget() noexcept { return _widget; }
+    const auto &refWidget() const noexcept { return _widget; }
+
+  private:
+    Shared<WidgetComponentConcept> _widget;
+  };
+  struct InternalWidget : WidgetBase {
+    InternalWidget() = default;
+    InternalWidget(Shared<WidgetConcept> widget) : _widget{widget} {}
+
+    void paint() { _widget->paint(); }
+    auto &refWidget() noexcept { return _widget; }
+    const auto &refWidget() const noexcept { return _widget; }
+
+  private:
+    Shared<WidgetConcept> _widget;
+  };
+  using GenericWidgetElement = std::variant<InternalWidget, LeafWidget>;
 
   struct IDGenerator {
     ImGuiID nextId() noexcept {
@@ -402,39 +431,39 @@ struct ImageWidgetComponent : WidgetComponentConcept {
 
       void paint() override {
         if (ImGui::BeginMenu(_name.data())) {
-          for (auto &item : _items) item->paint();
+          for (auto &item : _items) item.paint();
           ImGui::EndMenu();
         }
       }
 
-      MenuType &appendWidget(WidgetComponentElement ce) {
+      MenuType &appendWidget(LeafWidget ce) {
         _items.push_back(zs::move(ce));
         return *this;
       }
       template <typename W> MenuType &appendWidget(W &&w) {
-        _items.push_back(std::make_shared<W>(FWD(w)));
+        _items.emplace_back(std::make_shared<W>(FWD(w)));
         return *this;
       }
       template <typename F> MenuType &appendItemWithAction(std::string_view label, F &&f,
                                                            std::string_view shortcut = "") {
-        _items.push_back(std::make_shared<MenuItemWidget>(label, FWD(f), shortcut));
+        _items.emplace_back(std::make_shared<MenuItemWidget>(label, FWD(f), shortcut));
         return *this;
       }
       MenuType &appendItem(std::string_view label, std::string_view shortcut = "") {
-        _items.push_back(std::make_shared<MenuItemWidget>(label, shortcut));
+        _items.emplace_back(std::make_shared<MenuItemWidget>(label, shortcut));
         return *this;
       }
       MenuType &appendMenu(const std::string &name) {
         _subMenuIds[name] = _items.size();
-        _items.push_back(std::make_shared<MenuType>(name));
+        _items.emplace_back(std::make_shared<MenuType>(name));
         return *this;
       }
       MenuType &withMenu(const std::string &name) {
-        return *std::dynamic_pointer_cast<MenuType>(_items[_subMenuIds.at(name)]);
+        return *std::dynamic_pointer_cast<MenuType>(_items[_subMenuIds.at(name)].refWidget());
       }
 
       std::string _name;
-      std::vector<WidgetComponentElement> _items;
+      std::vector<LeafWidget> _items;
       std::map<std::string, u32> _subMenuIds;
     };
 

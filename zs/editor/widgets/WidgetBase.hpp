@@ -197,7 +197,12 @@ namespace zs {
     WidgetColorStyle colorConfigs;
   };
   struct WindowWidgetNode : WidgetConfigs {
-    struct WidgetDescriptor {
+    struct WidgetEntry {
+      WidgetEntry(InternalWidget &&widget) : widget{zs::move(widget)} {}
+      WidgetEntry(LeafWidget &&widget) : widget{zs::move(widget)} {}
+
+      operator GenericWidgetElement &() noexcept { return widget; }
+      operator const GenericWidgetElement &() const noexcept { return widget; }
       GenericWidgetElement widget;
     };
 
@@ -273,9 +278,8 @@ namespace zs {
 
         /// draw components and subwindows
         for (auto &comp : components) {
-          match([](Shared<WidgetConcept> &widget) { widget->paint(); },
-                [](Shared<WidgetComponentConcept> &widgetComponent) { widgetComponent->paint(); })(
-              comp.widget);
+          match([](InternalWidget &widget) { widget.paint(); },
+                [](LeafWidget &widgetComponent) { widgetComponent.paint(); })(comp.widget);
         }
 
         if (!topLevel) ImGui::EndChild();
@@ -286,17 +290,17 @@ namespace zs {
     }
     /// manage components
     template <typename ChildT> void appendComponent(ChildT &&widget) {
-      components.push_back(WidgetDescriptor{
-          Shared<WidgetComponentConcept>{zs::make_shared<remove_cvref_t<ChildT>>(FWD(widget))}});
+      components.emplace_back(LeafWidget{zs::make_shared<remove_cvref_t<ChildT>>(FWD(widget))});
     }
     template <typename ChildT, enable_if_t<is_base_of_v<WidgetComponentConcept, ChildT>> = 0>
     void appendComponent(Shared<ChildT> &&widget) {
-      components.push_back(WidgetDescriptor{Shared<WidgetComponentConcept>{FWD(widget)}});
+      components.emplace_back(LeafWidget{Shared<WidgetComponentConcept>{FWD(widget)}});
     }
     template <typename ChildT, enable_if_t<is_base_of_v<WidgetComponentConcept, ChildT>> = 0>
     void appendComponent(ChildT *widget) {
-      components.push_back(WidgetDescriptor{Shared<ChildT>{widget}});
+      components.emplace_back(LeafWidget{Shared<ChildT>{widget}});
     }
+
     void setMenuComponent(MenuBarWidgetComponent &&w) { menu = zs::move(w); }
 
     /// layout
@@ -332,7 +336,7 @@ namespace zs {
     DockingLayoutBuilder layoutBuilder;
     // contents
     std::optional<MenuBarWidgetComponent> menu;
-    std::vector<WidgetDescriptor> components;
+    std::vector<WidgetEntry> components;
     // states
     bool topLevel;
     bool isFirstFrame{true};
