@@ -1,7 +1,8 @@
 #pragma once
-#include "interface/details/PyHelper.hpp"
-#include "editor/widgets/GraphWidgetComponent.hpp"
 #include <Python.h>
+
+#include "editor/widgets/GraphWidgetComponent.hpp"
+#include "interface/details/PyHelper.hpp"
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,9 +11,8 @@ extern "C" {
 ///////////////////////////////////////////////////////////////////////////////////////////
 
 extern PyTypeObject ZpyEditorGraph_Type;
-#define ZpyEditorGraph_Check(v)                                                \
-  (PyObject_IsInstance(static_cast<PyObject *>(v),                             \
-                       static_cast<PyObject *>(&ZpyEditorGraph_Type)))
+#define ZpyEditorGraph_Check(v) \
+  (PyObject_IsInstance(static_cast<PyObject *>(v), static_cast<PyObject *>(&ZpyEditorGraph_Type)))
 
 typedef struct {
   //

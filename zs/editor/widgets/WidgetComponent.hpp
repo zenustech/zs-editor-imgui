@@ -11,6 +11,7 @@
 #include "zensim/types/ImplPattern.hpp"
 #include "zensim/ui/Widget.hpp"
 #include "zensim/zpc_tpls/fmt/core.h"
+#include "zensim/zpc_tpls/moodycamel/concurrent_queue/concurrentqueue.h"
 
 namespace zs {
 
@@ -41,29 +42,63 @@ namespace zs {
     // status
     bool _focused{false}, _hovered{true};
   };
-  struct LeafWidget : WidgetBase {
+  using GuiEventQueue = moodycamel::ConcurrentQueue<GuiEvent>;
+  struct LeafWidget : WidgetBase, WidgetComponentConcept {
     LeafWidget() = default;
     LeafWidget(Shared<WidgetComponentConcept> widget) : _widget{widget} {}
 
-    void paint() { _widget->paint(); }
+    void paint() override { _widget->paint(); }
     auto &refWidget() noexcept { return _widget; }
     const auto &refWidget() const noexcept { return _widget; }
+
+    GuiEventQueue *getMessageQueue() noexcept { return _msgQueue; }
+    LeafWidget &connectMessageQueue(GuiEventQueue *q) noexcept {
+      _msgQueue = q;
+      return *this;
+    }
 
   private:
+    GuiEventQueue *_msgQueue{nullptr};
     Shared<WidgetComponentConcept> _widget;
   };
-  struct InternalWidget : WidgetBase {
+  struct InternalWidget : WidgetBase, WidgetConcept {
     InternalWidget() = default;
+    ~InternalWidget();
     InternalWidget(Shared<WidgetConcept> widget) : _widget{widget} {}
 
-    void paint() { _widget->paint(); }
+    InternalWidget(InternalWidget &&o) noexcept
+        : _msgQueue{zs::exchange(o._msgQueue, nullptr)},
+          _widget{zs::move(o._widget)},
+          _ownQueue{zs::exchange(o._ownQueue, false)} {}
+    InternalWidget &operator=(InternalWidget &&o);
+    InternalWidget(const InternalWidget &) = delete;
+    InternalWidget &operator=(const InternalWidget &) = delete;
+
+    void paint() override { _widget->paint(); }
     auto &refWidget() noexcept { return _widget; }
     const auto &refWidget() const noexcept { return _widget; }
+
+    template <typename T> auto widget() { return std::dynamic_pointer_cast<T>(_widget); }
+    template <typename T> auto widget() const { return std::dynamic_pointer_cast<T>(_widget); }
+
+    GuiEventQueue *getMessageQueue() noexcept { return _msgQueue; }
+    InternalWidget &connectMessageQueue(GuiEventQueue *q) {
+      if (_ownQueue) delete _msgQueue;
+      _msgQueue = q;
+      _ownQueue = false;
+      return *this;
+    }
+    void setupMessageQueue() {
+      if (_ownQueue) delete _msgQueue;
+      _msgQueue = new GuiEventQueue;
+      _ownQueue = true;
+    }
 
   private:
     Shared<WidgetConcept> _widget;
+    GuiEventQueue *_msgQueue{nullptr};
+    bool _ownQueue{false};
   };
-  using GenericWidgetElement = std::variant<InternalWidget, LeafWidget>;
 
   struct IDGenerator {
     ImGuiID nextId() noexcept {

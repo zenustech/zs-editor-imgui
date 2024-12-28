@@ -25,11 +25,14 @@ namespace zs {
   namespace bp = boost::process;
 
   void GUIWindow::setupGUI() {
-    globalWidget = WindowWidgetNode{
+    rootWidget = InternalWidget{std::make_shared<WindowWidgetNode>(
         "Root", nullptr,
         ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar
             | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
-            | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus};
+            | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus)};
+    rootWidget.setupMessageQueue();
+
+    WindowWidgetNode &globalWidget = refGlobalWidget();
 
     globalWidget.setStyle(ImGuiStyleVar_WindowRounding, 0.0f);
     globalWidget.setStyle(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -257,7 +260,7 @@ namespace zs {
     menuBarWidget.appendMenu((const char *)ICON_MD_SPACE_DASHBOARD u8"窗口");
     menuBarWidget.withMenu((const char *)ICON_MD_SPACE_DASHBOARD u8"窗口")
         .appendItemWithAction((const char *)u8"重置布局",
-                              [this]() { globalWidget.requireLayoutRebuild(); },
+                              [this]() { refGlobalWidget().requireLayoutRebuild(); },
                               (const char *)u8"Alt+R");
     menuBarWidget.withMenu((const char *)ICON_MD_SPACE_DASHBOARD u8"窗口")
         .appendItemWithAction((const char *)u8"重置主题风格",
@@ -292,26 +295,26 @@ namespace zs {
     auto assetManager
         = WindowWidgetNode{(const char *)ICON_MD_CATEGORY u8"资源管理", &globalWidget};
     assetManager.appendComponent(ResourceSystem::ref_widget(g_defaultWidgetLabelAssetBrowser));
-    globalWidget.appendComponent(move(assetManager));
+    globalWidget.appendChild(move(assetManager));
 
     /// timeline
     ResourceSystem::register_widget(g_defaultWidgetLabelSequencer, new SequencerWidget());
     auto timelineManager
         = WindowWidgetNode{(const char *)ICON_MD_TIMELINE u8"时间轴", &globalWidget};
     timelineManager.appendComponent(ResourceSystem::ref_widget(g_defaultWidgetLabelSequencer));
-    globalWidget.appendComponent(move(timelineManager));
+    globalWidget.appendChild(move(timelineManager));
 
     /// text editor
     auto textEditor = WindowWidgetNode{(const char *)ICON_MD_SOURCE u8"文本编辑", &globalWidget};
     textEditor.appendComponent(new TextEditor());
-    globalWidget.appendComponent(move(textEditor));
+    globalWidget.appendChild(move(textEditor));
 
     /// graph editor
     auto graphEditor = WindowWidgetNode{(const char *)ICON_MD_SCHEMA u8"结点图", &globalWidget};
     ResourceSystem::register_widget(g_defaultWidgetLabelGraphEditor,
                                     GraphWidgetComponent{states.graphs.at("Editor")});
     graphEditor.appendComponent(ResourceSystem::ref_widget(g_defaultWidgetLabelGraphEditor));
-    globalWidget.appendComponent(move(graphEditor));
+    globalWidget.appendChild(move(graphEditor));
 
     /// 3d scene viewport
     auto sceneView
@@ -321,19 +324,19 @@ namespace zs {
     ResourceSystem::register_widget(g_defaultWidgetLabelScene,
                                     states.sceneEditor.get().getWidget());
     sceneView.appendComponent(ResourceSystem::ref_widget(g_defaultWidgetLabelScene));
-    globalWidget.appendComponent(move(sceneView));
+    globalWidget.appendChild(move(sceneView));
 
     /// terminal (placeholder)
     auto terminalWidget = WindowWidgetNode{(const char *)(ICON_MD_CODE u8"控制台"), &globalWidget};
     terminalWidget.appendComponent(
         TerminalWidgetComponent{(const char *)ICON_MD_CODE u8"控制台", states.terminal});
-    globalWidget.appendComponent(move(terminalWidget));
+    globalWidget.appendChild(move(terminalWidget));
 
     /// control panel
     auto controlWidget
         = WindowWidgetNode{(const char *)ICON_MD_SETTINGS u8"控制面板", &globalWidget};
     controlWidget.appendComponent(ButtonWidgetComponent{
-        "Reset Docking Layout", [this]() { globalWidget.requireLayoutRebuild(); }});
+        "Reset Docking Layout", [this]() { refGlobalWidget().requireLayoutRebuild(); }});
     controlWidget.appendComponent(ButtonWidgetComponent{(const char *)u8"重置主题风格",
                                                         []() { ImguiSystem::reset_styles(); }});
     controlWidget.appendComponent(
@@ -373,7 +376,7 @@ namespace zs {
     }));
 #endif
     ///
-    globalWidget.appendComponent(move(controlWidget));
+    globalWidget.appendChild(move(controlWidget));
 
     auto usdTreeWidget
         = WindowWidgetNode{(const char *)ICON_MD_ACCOUNT_TREE u8"USD树", &globalWidget};
@@ -415,8 +418,8 @@ namespace zs {
             ResourceSystem::get_widget_ptr(usdKeys[idx])->paint();
           }
         }}*/
-    globalWidget.appendComponent(move(usdTreeWidget));
-    globalWidget.appendComponent(move(primTreeWidget));
+    globalWidget.appendChild(move(usdTreeWidget));
+    globalWidget.appendChild(move(primTreeWidget));
 
     /// (widget) detail panel (formerly known as property panel)
     auto propertyWidget = WindowWidgetNode{(const char *)ICON_MD_TUNE u8"属性面板", &globalWidget};
@@ -504,11 +507,11 @@ namespace zs {
       }
     }});
 #endif
-    globalWidget.appendComponent(move(propertyWidget));
+    globalWidget.appendChild(move(propertyWidget));
   }
 
   void GUIWindow::drawGUI() {
-    globalWidget.paint();
+    rootWidget.paint();
     ImGui::ShowDemoWindow();
   }
 

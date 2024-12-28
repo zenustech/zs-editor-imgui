@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "ImguiRenderer.hpp"
+#include "widgets/WidgetComponent.hpp"
 #include "zensim/TypeAlias.hpp"
 #include "zensim/container/Callables.hpp"
 #include "zensim/math/Vec.h"
@@ -19,13 +20,13 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
-#include "world/system/PyExecSystem.hpp"
 #include "SceneEditor.hpp"
-#include "interface/world/ObjectInterface.hpp"
 #include "editor/widgets/GraphWidgetComponent.hpp"
 #include "editor/widgets/TermWidgetComponent.hpp"
 #include "editor/widgets/TextEditorComponent.hpp"
 #include "editor/widgets/WidgetBase.hpp"
+#include "interface/world/ObjectInterface.hpp"
+#include "world/system/PyExecSystem.hpp"
 
 struct ImGuiViewport;
 namespace zs {
@@ -93,7 +94,9 @@ namespace zs {
     ~GUIWindow();
 
     // glfw
-    bool shouldClose() { return glfwWindowShouldClose(window) || PyExecSystem::termination_requested(); }
+    bool shouldClose() {
+      return glfwWindowShouldClose(window) || PyExecSystem::termination_requested();
+    }
     void pollEvents() const { glfwPollEvents(); }
     bool beginFrame();
 
@@ -128,9 +131,9 @@ namespace zs {
     u32 getHeight() const noexcept { return states.height; }
     u32 getSwapchainImageCount() const noexcept { return states.swapchain.get().imageCount(); }
 
-    bool isMinimized() const noexcept { 
+    bool isMinimized() const noexcept {
       return glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0;
-      // return getWidth() == 0 && getHeight() == 0; 
+      // return getWidth() == 0 && getHeight() == 0;
     }
     bool wasWindowResized() noexcept { return states.framebufferResized; }
     void resetWindowResizedFlag() noexcept { states.framebufferResized = false; }
@@ -218,11 +221,14 @@ namespace zs {
       void updateMonitors();
     };
 
+    WindowWidgetNode &refGlobalWidget() { return *rootWidget.widget<WindowWidgetNode>(); }
+
   protected:
     friend struct ImguiSystem;
 
     InteractiveStates states;
-    WindowWidgetNode globalWidget;
+    // WindowWidgetNode globalWidget;
+    InternalWidget rootWidget;
 
     GLFWwindow *window;
   };

@@ -6,6 +6,22 @@
 
 namespace zs {
 
+  InternalWidget::~InternalWidget() {
+    if (_ownQueue) {
+      delete _msgQueue;
+      _ownQueue = false;
+    }
+    _msgQueue = nullptr;
+  }
+
+  InternalWidget& InternalWidget::operator=(InternalWidget&& o) {
+    if (_ownQueue) delete _msgQueue;
+    _widget = zs::move(o._widget);
+    _msgQueue = zs::exchange(o._msgQueue, nullptr);
+    _ownQueue = zs::exchange(o._ownQueue, false);
+    return *this;
+  }
+
   /// AssetEntry
   const char* AssetEntry::getDisplayLabel() const {
     const char* label = (const char*)ICON_MDI_FILE;

@@ -158,7 +158,7 @@ namespace zs {
   ///
   /// widget configs
   ///
-  struct WidgetConfigs : WidgetConcept {
+  struct WidgetConfigs {
     WidgetConfigs &setStyle(ImGuiStyleVar_ style, float param) {
       styleConfigs.set(style, param);
       return *this;
@@ -196,10 +196,19 @@ namespace zs {
     WidgetStyle styleConfigs;
     WidgetColorStyle colorConfigs;
   };
-  struct WindowWidgetNode : WidgetConfigs {
+  struct WindowWidgetNode;
+
+  using GenericWidgetElement = std::variant<InternalWidget, LeafWidget, Shared<WindowWidgetNode>>;
+
+  struct WindowWidgetNode : WidgetConfigs, InternalWidget {
     struct WidgetEntry {
-      WidgetEntry(InternalWidget &&widget) : widget{zs::move(widget)} {}
-      WidgetEntry(LeafWidget &&widget) : widget{zs::move(widget)} {}
+      WidgetEntry(InternalWidget &&widget, GuiEventQueue *q)
+          : widget{zs::move(widget.connectMessageQueue(q))} {}
+      WidgetEntry(LeafWidget &&widget, GuiEventQueue *q)
+          : widget{zs::move(widget.connectMessageQueue(q))} {}
+      WidgetEntry(Shared<WindowWidgetNode> node, GuiEventQueue *q) : widget{node} {
+        node->connectMessageQueue(q);
+      }
 
       operator GenericWidgetElement &() noexcept { return widget; }
       operator const GenericWidgetElement &() const noexcept { return widget; }
@@ -279,7 +288,8 @@ namespace zs {
         /// draw components and subwindows
         for (auto &comp : components) {
           match([](InternalWidget &widget) { widget.paint(); },
-                [](LeafWidget &widgetComponent) { widgetComponent.paint(); })(comp.widget);
+                [](LeafWidget &widgetComponent) { widgetComponent.paint(); },
+                [](Shared<WindowWidgetNode> &windowNode) { windowNode->paint(); })(comp.widget);
         }
 
         if (!topLevel) ImGui::EndChild();
@@ -290,15 +300,27 @@ namespace zs {
     }
     /// manage components
     template <typename ChildT> void appendComponent(ChildT &&widget) {
-      components.emplace_back(LeafWidget{zs::make_shared<remove_cvref_t<ChildT>>(FWD(widget))});
+      components.emplace_back(LeafWidget{zs::make_shared<remove_cvref_t<ChildT>>(FWD(widget))},
+                              getMessageQueue());
     }
     template <typename ChildT, enable_if_t<is_base_of_v<WidgetComponentConcept, ChildT>> = 0>
     void appendComponent(Shared<ChildT> &&widget) {
-      components.emplace_back(LeafWidget{Shared<WidgetComponentConcept>{FWD(widget)}});
+      components.emplace_back(LeafWidget{Shared<WidgetComponentConcept>{FWD(widget)}},
+                              getMessageQueue());
     }
     template <typename ChildT, enable_if_t<is_base_of_v<WidgetComponentConcept, ChildT>> = 0>
     void appendComponent(ChildT *widget) {
-      components.emplace_back(LeafWidget{Shared<ChildT>{widget}});
+      components.emplace_back(LeafWidget{Shared<ChildT>{widget}}, getMessageQueue());
+    }
+
+    void appendChild(WindowWidgetNode &&widget) {
+      components.emplace_back(std::make_shared<WindowWidgetNode>(zs::move(widget)),
+                              getMessageQueue());
+    }
+
+    template <typename ChildT> void appendChild(ChildT &&widget) {
+      components.emplace_back(InternalWidget{zs::make_shared<remove_cvref_t<ChildT>>(FWD(widget))},
+                              getMessageQueue());
     }
 
     void setMenuComponent(MenuBarWidgetComponent &&w) { menu = zs::move(w); }
