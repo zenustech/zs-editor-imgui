@@ -200,7 +200,7 @@ namespace zs {
 
   using GenericWidgetElement = std::variant<InternalWidget, LeafWidget, Shared<WindowWidgetNode>>;
 
-  struct WindowWidgetNode : WidgetConfigs, InternalWidget {
+  struct WindowWidgetNode : WidgetConfigs, WidgetBase, WidgetConcept {
     struct WidgetEntry {
       WidgetEntry(InternalWidget &&widget, GuiEventQueue *q)
           : widget{zs::move(widget.connectMessageQueue(q))} {}

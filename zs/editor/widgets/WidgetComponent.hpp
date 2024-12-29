@@ -35,14 +35,41 @@ namespace zs {
   };
   /// @brief for receiving/issuing/processing events
   struct GuiEvent {};
-  struct WidgetBase {
+
+  using GuiEventQueue = moodycamel::ConcurrentQueue<GuiEvent>;
+  struct GuiEventHub {
+    GuiEventHub() = default;
+    ~GuiEventHub();
+    GuiEventHub(GuiEventHub &&o) noexcept
+        : _msgQueue{zs::exchange(o._msgQueue, nullptr)},
+          _ownQueue{zs::exchange(o._ownQueue, false)} {}
+    GuiEventHub &operator=(GuiEventHub &&o);
+    GuiEventHub(const GuiEventHub &) = delete;
+    GuiEventHub &operator=(const GuiEventHub &) = delete;
+
+    GuiEventQueue *getMessageQueue() noexcept { return _msgQueue; }
+    void connectMessageQueue(GuiEventQueue *q) {
+      if (_ownQueue) delete _msgQueue;
+      _msgQueue = q;
+      _ownQueue = false;
+    }
+    void setupMessageQueue() {
+      if (_ownQueue) delete _msgQueue;
+      _msgQueue = new GuiEventQueue;
+      _ownQueue = true;
+    }
+
+  protected:
+    GuiEventQueue *_msgQueue{nullptr};
+    bool _ownQueue{false};
+  };
+  struct WidgetBase : GuiEventHub {
     ;
     ;
     // properties
     // status
     bool _focused{false}, _hovered{true};
   };
-  using GuiEventQueue = moodycamel::ConcurrentQueue<GuiEvent>;
   struct LeafWidget : WidgetBase, WidgetComponentConcept {
     LeafWidget() = default;
     LeafWidget(Shared<WidgetComponentConcept> widget) : _widget{widget} {}
@@ -51,28 +78,23 @@ namespace zs {
     auto &refWidget() noexcept { return _widget; }
     const auto &refWidget() const noexcept { return _widget; }
 
-    GuiEventQueue *getMessageQueue() noexcept { return _msgQueue; }
+    template <typename T> auto widget() { return std::dynamic_pointer_cast<T>(_widget); }
+    template <typename T> auto widget() const { return std::dynamic_pointer_cast<T>(_widget); }
+
     LeafWidget &connectMessageQueue(GuiEventQueue *q) noexcept {
-      _msgQueue = q;
+      GuiEventHub::connectMessageQueue(q);
       return *this;
     }
 
   private:
-    GuiEventQueue *_msgQueue{nullptr};
     Shared<WidgetComponentConcept> _widget;
   };
   struct InternalWidget : WidgetBase, WidgetConcept {
     InternalWidget() = default;
-    ~InternalWidget();
+    ~InternalWidget() = default;
     InternalWidget(Shared<WidgetConcept> widget) : _widget{widget} {}
-
-    InternalWidget(InternalWidget &&o) noexcept
-        : _msgQueue{zs::exchange(o._msgQueue, nullptr)},
-          _widget{zs::move(o._widget)},
-          _ownQueue{zs::exchange(o._ownQueue, false)} {}
-    InternalWidget &operator=(InternalWidget &&o);
-    InternalWidget(const InternalWidget &) = delete;
-    InternalWidget &operator=(const InternalWidget &) = delete;
+    InternalWidget(InternalWidget &&) noexcept = default;
+    InternalWidget &operator=(InternalWidget &&) noexcept = default;
 
     void paint() override { _widget->paint(); }
     auto &refWidget() noexcept { return _widget; }
@@ -81,23 +103,13 @@ namespace zs {
     template <typename T> auto widget() { return std::dynamic_pointer_cast<T>(_widget); }
     template <typename T> auto widget() const { return std::dynamic_pointer_cast<T>(_widget); }
 
-    GuiEventQueue *getMessageQueue() noexcept { return _msgQueue; }
-    InternalWidget &connectMessageQueue(GuiEventQueue *q) {
-      if (_ownQueue) delete _msgQueue;
-      _msgQueue = q;
-      _ownQueue = false;
+    InternalWidget &connectMessageQueue(GuiEventQueue *q) noexcept {
+      GuiEventHub::connectMessageQueue(q);
       return *this;
-    }
-    void setupMessageQueue() {
-      if (_ownQueue) delete _msgQueue;
-      _msgQueue = new GuiEventQueue;
-      _ownQueue = true;
     }
 
   private:
     Shared<WidgetConcept> _widget;
-    GuiEventQueue *_msgQueue{nullptr};
-    bool _ownQueue{false};
   };
 
   struct IDGenerator {

@@ -6,7 +6,7 @@
 
 namespace zs {
 
-  InternalWidget::~InternalWidget() {
+  GuiEventHub::~GuiEventHub() {
     if (_ownQueue) {
       delete _msgQueue;
       _ownQueue = false;
@@ -14,9 +14,8 @@ namespace zs {
     _msgQueue = nullptr;
   }
 
-  InternalWidget& InternalWidget::operator=(InternalWidget&& o) {
+  GuiEventHub& GuiEventHub::operator=(GuiEventHub&& o) {
     if (_ownQueue) delete _msgQueue;
-    _widget = zs::move(o._widget);
     _msgQueue = zs::exchange(o._msgQueue, nullptr);
     _ownQueue = zs::exchange(o._ownQueue, false);
     return *this;
