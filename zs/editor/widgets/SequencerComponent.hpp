@@ -9,7 +9,7 @@
 
 namespace zs {
 
-  struct SequencerWidget : WidgetComponentConcept {
+  struct SequencerWidget : WidgetConcept {
     using TimeCodeIndex = long long int;
     struct Group {};
 

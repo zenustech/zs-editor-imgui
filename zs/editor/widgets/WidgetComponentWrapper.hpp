@@ -3,11 +3,11 @@
 
 namespace zs {
 
-  template <typename Widget> struct WidgetComponentWrapper : WidgetComponentConcept {
+  template <typename Widget> struct WidgetComponentWrapper : WidgetConcept {
     void paint() override { _embeddedWidget->paint(); }
 
     std::string _registryLabel;  // in ResourceSystem
-    Shared<WidgetComponentConcept> _embeddedWidget;
+    Shared<WidgetConcept> _embeddedWidget;
   };
 
 }  // namespace zs

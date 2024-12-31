@@ -201,34 +201,36 @@ namespace zs {
       bool framebufferResized = false;
 
       // glfw callbacks
+      GuiEventHub _eventQueue;
       // window cb
-      zs::callbacks<void(GLFWmonitor *, int)> monitorCb;
-      zs::callbacks<void(int, int, float)> resizeCb;
-      zs::callbacks<void()> closeCb;
+      zs::Signal<void(GLFWmonitor *, int)> monitorCb;
+      zs::Signal<void(int, int, float)> resizeCb;
+      zs::Signal<void()> closeCb;
 
       // key cb (int /*key*/, int /*scancode*/, int /*action*/, int /*mods*/)
-      zs::callbacks<void(int /*key*/, int /*repeat*/)> keyPressedCb;
-      zs::callbacks<void(int /*key*/)> keyReleasedCb;
-      zs::callbacks<void(char)> textCb;
+      zs::Signal<void(int /*key*/, int /*repeat*/)> keyPressedCb;
+      zs::Signal<void(int /*key*/)> keyReleasedCb;
+      zs::Signal<void(char)> textCb;
 
       // mouse cb (int /*button*/, int /*action*/, int /*mods*/)
-      zs::callbacks<void(int /*mouse button*/)> mousePressedCb, mouseReleasedCb;
-      zs::callbacks<void(int /*mouse entered*/)> mouseEnterCb;
-      zs::callbacks<void(float, float)> mouseMoveCb, mouseScrollCb;
+      zs::Signal<void(int /*mouse button*/)> mousePressedCb, mouseReleasedCb;
+      zs::Signal<void(int /*mouse entered*/)> mouseEnterCb;
+      zs::Signal<void(float, float)> mouseMoveCb, mouseScrollCb;
 
-      zs::callbacks<void(int /*path_count*/, const char ** /*paths*/)> mouseDropCb;
+      zs::Signal<void(int /*path_count*/, const char ** /*paths*/)> mouseDropCb;
 
       void updateMonitors();
     };
 
-    WindowWidgetNode &refGlobalWidget() { return *rootWidget.widget<WindowWidgetNode>(); }
+    // WindowWidgetNode &refGlobalWidget() { return *rootWidget.widget<WindowWidgetNode>(); }
+    WindowWidgetNode &refGlobalWidget() { return globalWidget; }
 
   protected:
     friend struct ImguiSystem;
 
     InteractiveStates states;
-    // WindowWidgetNode globalWidget;
-    InternalWidget rootWidget;
+    WindowWidgetNode globalWidget;
+    // InternalWidget rootWidget;
 
     GLFWwindow *window;
   };

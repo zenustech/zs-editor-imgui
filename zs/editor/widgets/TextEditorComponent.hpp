@@ -9,7 +9,7 @@
 
 namespace zs {
 
-  struct TextEditor : WidgetComponentConcept {
+  struct TextEditor : WidgetConcept {
     TextEditor();
     ~TextEditor();
 

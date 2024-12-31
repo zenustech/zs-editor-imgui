@@ -19,14 +19,14 @@ namespace zs {
     widget_split_down = ImGuiDir_Down
   };
 
-  struct DockingLayoutNode : HierarchyConcept {
+  struct DockingLayoutNode : virtual HierarchyConcept {
     struct SplitOp {
       ImGuiID nodeId;  // nodeid during split
       float ratio;
       ImGuiDir dir;  // ImGuiDir_None/Left/Right/Up/Down
     };
     DockingLayoutNode(ImGuiID id = -1, DockingLayoutNode *par = nullptr) : _id0{id}, _id{id} {
-      static_cast<HierarchyConcept *>(this)->parent() = par;
+      setParent(par);
     }
     DockingLayoutNode(DockingLayoutNode &&) noexcept = default;
     DockingLayoutNode &operator=(DockingLayoutNode &&) noexcept = default;
@@ -198,21 +198,30 @@ namespace zs {
   };
   struct WindowWidgetNode;
 
-  using GenericWidgetElement = std::variant<InternalWidget, LeafWidget, Shared<WindowWidgetNode>>;
+  using GenericWidgetElement = std::variant<WidgetNode, Shared<WindowWidgetNode>>;
 
-  struct WindowWidgetNode : WidgetConfigs, WidgetBase, WidgetConcept {
+  struct WindowWidgetNode : WidgetConfigs, WidgetBase, WindowConcept {
     struct WidgetEntry {
-      WidgetEntry(InternalWidget &&widget, GuiEventQueue *q)
-          : widget{zs::move(widget.connectMessageQueue(q))} {}
-      WidgetEntry(LeafWidget &&widget, GuiEventQueue *q)
-          : widget{zs::move(widget.connectMessageQueue(q))} {}
-      WidgetEntry(Shared<WindowWidgetNode> node, GuiEventQueue *q) : widget{node} {
-        node->connectMessageQueue(q);
+      WidgetEntry(WidgetNode &&widget) : _widget{zs::move(widget)} {}
+      WidgetEntry(Shared<WindowWidgetNode> node) : _widget{node} {}
+
+      operator GenericWidgetElement &() noexcept { return _widget; }
+      operator const GenericWidgetElement &() const noexcept { return _widget; }
+
+      template <typename T> auto widget() {
+        return match([](WidgetNode &n) -> Shared<T> { return n.template widget<T>(); },
+                     [](Shared<WindowWidgetNode> &n) -> Shared<T> {
+                       return std::dynamic_pointer_cast<T>(n);
+                     })(_widget);
+      }
+      template <typename T> auto widget() const {
+        return match([](const WidgetNode &n) -> Shared<const T> { return n.template widget<T>(); },
+                     [](const Shared<WindowWidgetNode> &n) -> Shared<const T> {
+                       return std::dynamic_pointer_cast<T>(n);
+                     })(_widget);
       }
 
-      operator GenericWidgetElement &() noexcept { return widget; }
-      operator const GenericWidgetElement &() const noexcept { return widget; }
-      GenericWidgetElement widget;
+      GenericWidgetElement _widget;
     };
 
     WindowWidgetNode(std::string_view tag = "DefaultWidget", HierarchyConcept *parent = nullptr,
@@ -226,7 +235,7 @@ namespace zs {
           dockSpaceNeedRebuild{false},
           layoutBuilder{} {
       layoutBuilder.setName(name + "_dockspace");
-      static_cast<HierarchyConcept *>(this)->parent() = parent;
+      setParent(parent);
       if (allowClose == true) openStatus = true;
     }
     ~WindowWidgetNode() = default;
@@ -287,9 +296,8 @@ namespace zs {
 
         /// draw components and subwindows
         for (auto &comp : components) {
-          match([](InternalWidget &widget) { widget.paint(); },
-                [](LeafWidget &widgetComponent) { widgetComponent.paint(); },
-                [](Shared<WindowWidgetNode> &windowNode) { windowNode->paint(); })(comp.widget);
+          match([](WidgetNode &widgetComponent) { widgetComponent.paint(); },
+                [](Shared<WindowWidgetNode> &windowNode) { windowNode->paint(); })(comp._widget);
         }
 
         if (!topLevel) ImGui::EndChild();
@@ -298,29 +306,32 @@ namespace zs {
 
       ImGui::End();
     }
+    bool onEvent(GuiEvent *e) override {
+      bool ret = false;
+      for (auto &comp : components) {
+        ret |= match([e](WidgetNode &widgetComponent) { return widgetComponent.onEvent(e); },
+                     [e](Shared<WindowWidgetNode> &windowNode) { return windowNode->onEvent(e); })(
+            comp._widget);
+      }
+      return ret;
+    }
     /// manage components
     template <typename ChildT> void appendComponent(ChildT &&widget) {
-      components.emplace_back(LeafWidget{zs::make_shared<remove_cvref_t<ChildT>>(FWD(widget))},
-                              getMessageQueue());
+      components.emplace_back(
+          WidgetNode{zs::make_shared<remove_cvref_t<ChildT>>(FWD(widget)), this});
     }
-    template <typename ChildT, enable_if_t<is_base_of_v<WidgetComponentConcept, ChildT>> = 0>
+    template <typename ChildT, enable_if_t<is_base_of_v<WidgetConcept, ChildT>> = 0>
     void appendComponent(Shared<ChildT> &&widget) {
-      components.emplace_back(LeafWidget{Shared<WidgetComponentConcept>{FWD(widget)}},
-                              getMessageQueue());
+      components.emplace_back(WidgetNode{Shared<WidgetConcept>{FWD(widget)}, this});
     }
-    template <typename ChildT, enable_if_t<is_base_of_v<WidgetComponentConcept, ChildT>> = 0>
+    template <typename ChildT, enable_if_t<is_base_of_v<WidgetConcept, ChildT>> = 0>
     void appendComponent(ChildT *widget) {
-      components.emplace_back(LeafWidget{Shared<ChildT>{widget}}, getMessageQueue());
+      components.emplace_back(WidgetNode{Shared<ChildT>{widget}, this});
     }
 
     void appendChild(WindowWidgetNode &&widget) {
-      components.emplace_back(std::make_shared<WindowWidgetNode>(zs::move(widget)),
-                              getMessageQueue());
-    }
-
-    template <typename ChildT> void appendChild(ChildT &&widget) {
-      components.emplace_back(InternalWidget{zs::make_shared<remove_cvref_t<ChildT>>(FWD(widget))},
-                              getMessageQueue());
+      components.emplace_back(std::make_shared<WindowWidgetNode>(zs::move(widget)));
+      components.back().widget<WindowWidgetNode>()->setParent(this);
     }
 
     void setMenuComponent(MenuBarWidgetComponent &&w) { menu = zs::move(w); }

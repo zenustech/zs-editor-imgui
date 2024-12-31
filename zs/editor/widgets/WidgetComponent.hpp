@@ -34,9 +34,7 @@ namespace zs {
     explicit operator ImGuiID() const noexcept { return ImGui::GetCurrentWindow()->GetID(id); }
   };
   /// @brief for receiving/issuing/processing events
-  struct GuiEvent {};
-
-  using GuiEventQueue = moodycamel::ConcurrentQueue<GuiEvent>;
+  using GuiEventQueue = moodycamel::ConcurrentQueue<GuiEvent *>;
   struct GuiEventHub {
     GuiEventHub() = default;
     ~GuiEventHub();
@@ -58,57 +56,48 @@ namespace zs {
       _msgQueue = new GuiEventQueue;
       _ownQueue = true;
     }
+    void postEvents(WidgetConcept *receiver) {
+      assert(_msgQueue && receiver);
+      auto &q = *_msgQueue;
+      std::array<GuiEvent *, 512> evs;
+      while (auto n = q.try_dequeue_bulk(evs.begin(), 512)) {
+        for (int i = 0; i < n; ++i) {
+          receiver->onEvent(evs[i]);
+        }
+      }
+    }
 
   protected:
     GuiEventQueue *_msgQueue{nullptr};
     bool _ownQueue{false};
   };
-  struct WidgetBase : GuiEventHub {
+  struct WidgetBase {
     ;
     ;
     // properties
     // status
     bool _focused{false}, _hovered{true};
   };
-  struct LeafWidget : WidgetBase, WidgetComponentConcept {
-    LeafWidget() = default;
-    LeafWidget(Shared<WidgetComponentConcept> widget) : _widget{widget} {}
+  struct WidgetNode : WidgetBase, WidgetConcept {
+    WidgetNode() = default;
+    WidgetNode(Shared<WidgetConcept> widget, WidgetConcept *p = nullptr) : _widget{widget} {
+      setParent(p);
+    }
 
     void paint() override { _widget->paint(); }
     auto &refWidget() noexcept { return _widget; }
     const auto &refWidget() const noexcept { return _widget; }
 
     template <typename T> auto widget() { return std::dynamic_pointer_cast<T>(_widget); }
-    template <typename T> auto widget() const { return std::dynamic_pointer_cast<T>(_widget); }
-
-    LeafWidget &connectMessageQueue(GuiEventQueue *q) noexcept {
-      GuiEventHub::connectMessageQueue(q);
-      return *this;
+    template <typename T> auto widget() const {
+      return std::dynamic_pointer_cast<const T>(_widget);
     }
 
-  private:
-    Shared<WidgetComponentConcept> _widget;
-  };
-  struct InternalWidget : WidgetBase, WidgetConcept {
-    InternalWidget() = default;
-    ~InternalWidget() = default;
-    InternalWidget(Shared<WidgetConcept> widget) : _widget{widget} {}
-    InternalWidget(InternalWidget &&) noexcept = default;
-    InternalWidget &operator=(InternalWidget &&) noexcept = default;
-
-    void paint() override { _widget->paint(); }
-    auto &refWidget() noexcept { return _widget; }
-    const auto &refWidget() const noexcept { return _widget; }
-
-    template <typename T> auto widget() { return std::dynamic_pointer_cast<T>(_widget); }
-    template <typename T> auto widget() const { return std::dynamic_pointer_cast<T>(_widget); }
-
-    InternalWidget &connectMessageQueue(GuiEventQueue *q) noexcept {
-      GuiEventHub::connectMessageQueue(q);
-      return *this;
-    }
+    bool onEvent(GuiEvent *e) { return _widget->onEvent(e); }
+    gui_widget_e getType() const { return _widget->getType(); }
 
   private:
+    // certain compound widget can have multiple child widgets, managed internally
     Shared<WidgetConcept> _widget;
   };
 
@@ -294,7 +283,7 @@ namespace zs {
     ImGuiID _id{(ImGuiID)-1};
   };
 
-  struct ActionWidgetComponent : WidgetComponentConcept {
+  struct ActionWidgetComponent : WidgetConcept {
     ActionWidgetComponent() = default;
     ~ActionWidgetComponent() = default;
     template <typename F> ActionWidgetComponent(F &&f) : _aggregate{FWD(f)} {}
@@ -351,7 +340,7 @@ namespace zs {
     ~TextWidgetComponent() = default;
   };
 
-  struct ButtonWidgetComponent : WidgetComponentConcept {
+  struct ButtonWidgetComponent : WidgetConcept {
     enum button_variant_e { normal = 0, little, invisible, arrow, close, collapse };
 
     template <typename Func>
@@ -378,7 +367,7 @@ namespace zs {
   };
 
 #if 0
-struct ImageWidgetComponent : WidgetComponentConcept {
+struct ImageWidgetComponent : WidgetConcept {
   ImageWidgetComponent(const vk::DescriptorSet &imgSet, const ImVec2 &size)
       : _imageSet{imgSet}, _size{size} {}
 
@@ -392,7 +381,7 @@ struct ImageWidgetComponent : WidgetComponentConcept {
 };
 #endif
 
-  struct CheckboxWidgetComponent : WidgetComponentConcept {
+  struct CheckboxWidgetComponent : WidgetConcept {
     CheckboxWidgetComponent(std::string_view label, bool &flag) : _label{label}, _switch{flag} {}
     void paint() override { ImGui::Checkbox(_label.data(), &_switch); }
 
@@ -400,8 +389,7 @@ struct ImageWidgetComponent : WidgetComponentConcept {
     bool &_switch;
   };
 
-  template <typename T = float, size_t N = 1> struct SliderWidgetComponent
-      : WidgetComponentConcept {
+  template <typename T = float, size_t N = 1> struct SliderWidgetComponent : WidgetConcept {
     static_assert(is_arithmetic_v<T>, "T should be an arithmetic type.");
     SliderWidgetComponent(std::string_view label, T *vals = nullptr, float speed = 1.f, T mi = 0,
                           T ma = 0,
@@ -469,8 +457,8 @@ struct ImageWidgetComponent : WidgetComponentConcept {
     std::string _label, _shortcut;
   };
 
-  struct MenuBarWidgetComponent : WidgetComponentConcept {
-    struct MenuType : WidgetComponentConcept {
+  struct MenuBarWidgetComponent : WidgetConcept {
+    struct MenuType : WidgetConcept {
       MenuType(std::string_view name) : _name{name} {}
       ~MenuType() = default;
       MenuType(MenuType &&) = default;
@@ -483,7 +471,7 @@ struct ImageWidgetComponent : WidgetComponentConcept {
         }
       }
 
-      MenuType &appendWidget(LeafWidget ce) {
+      MenuType &appendWidget(WidgetNode ce) {
         _items.push_back(zs::move(ce));
         return *this;
       }
@@ -510,7 +498,7 @@ struct ImageWidgetComponent : WidgetComponentConcept {
       }
 
       std::string _name;
-      std::vector<LeafWidget> _items;
+      std::vector<WidgetNode> _items;
       std::map<std::string, u32> _subMenuIds;
     };
 

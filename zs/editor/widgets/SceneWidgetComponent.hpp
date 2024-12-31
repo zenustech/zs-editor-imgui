@@ -6,7 +6,7 @@ namespace zs {
 
   struct SceneEditor;
 
-  struct SceneEditorWidgetComponent : WidgetComponentConcept {
+  struct SceneEditorWidgetComponent : WidgetConcept {
     void paint() override;
 
     SceneEditor* sceneEditor;

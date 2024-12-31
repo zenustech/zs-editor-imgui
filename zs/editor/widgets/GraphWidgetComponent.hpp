@@ -561,7 +561,7 @@ namespace zs {
 
   }  // namespace ge
 
-  struct GraphWidgetComponent : WidgetComponentConcept {
+  struct GraphWidgetComponent : WidgetConcept {
     GraphWidgetComponent() = default;
     GraphWidgetComponent(const Shared<ge::Graph> &graph) : _graph{graph} {}
     ~GraphWidgetComponent() = default;

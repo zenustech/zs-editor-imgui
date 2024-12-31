@@ -24,7 +24,7 @@ namespace zs {
   namespace ui {
 
     // key : u32 index, string, pointer
-    struct TreeNodeConcept : WidgetComponentConcept {
+    struct TreeNodeConcept : WidgetConcept {
       ~TreeNodeConcept() = default;
       virtual u32 numChildren() const = 0;
       virtual const char *getLabel() const = 0;
@@ -306,7 +306,7 @@ namespace zs {
     /// @note new reference
     UsdTreeNode *build_usd_tree_node(ScenePrimConcept *pr);
 
-    struct SceneFileEditor : WidgetComponentConcept {
+    struct SceneFileEditor : WidgetConcept {
       SceneFileEditor();
       ~SceneFileEditor();
 
@@ -347,7 +347,7 @@ namespace zs {
     /// @note new reference
     PrimitiveTreeNode *build_primitive_tree_node(Weak<ZsPrimitive> pr);
 
-    struct PrimitiveEditor : WidgetComponentConcept {
+    struct PrimitiveEditor : WidgetConcept {
       PrimitiveEditor();
       ~PrimitiveEditor();
 

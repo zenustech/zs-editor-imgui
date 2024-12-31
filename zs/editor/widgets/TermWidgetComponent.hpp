@@ -63,7 +63,7 @@ namespace zs {
     int inputTextCallback(ImGuiInputTextCallbackData *data);
   };
 
-  struct TerminalWidgetComponent : WidgetComponentConcept {
+  struct TerminalWidgetComponent : WidgetConcept {
     TerminalWidgetComponent() = default;
     TerminalWidgetComponent(std::string_view label, Shared<Terminal> &term)
         : _label{label}, _term{term} {}

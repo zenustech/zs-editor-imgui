@@ -10,7 +10,7 @@
 namespace zs {
 
   struct SceneEditorWidgetComponent;
-  struct SceneEditorDetailPanel : WidgetComponentConcept {
+  struct SceneEditorDetailPanel : WidgetConcept {
     void paint() override {}
 
     SceneEditorDetailPanel(SceneEditorWidgetComponent *w) noexcept : widget{w} {}
@@ -18,7 +18,7 @@ namespace zs {
   };
 
   struct AssetBrowserComponent;
-  struct AssetBrowserDetailPanel : WidgetComponentConcept {
+  struct AssetBrowserDetailPanel : WidgetConcept {
     void paint() override {}
 
     AssetBrowserDetailPanel(AssetBrowserComponent *w) noexcept : widget{w} {}
@@ -26,7 +26,7 @@ namespace zs {
   };
 
   struct SequencerWidget;
-  struct SequencerDetailPanel : WidgetComponentConcept {
+  struct SequencerDetailPanel : WidgetConcept {
     void paint() override {}
 
     SequencerDetailPanel(SequencerWidget *w) noexcept : widget{w} {}
@@ -34,7 +34,7 @@ namespace zs {
   };
 
   struct GraphWidgetComponent;
-  struct GraphEditorDetailPanel : WidgetComponentConcept {
+  struct GraphEditorDetailPanel : WidgetConcept {
     void paint() override {}
 
     GraphEditorDetailPanel(GraphWidgetComponent *w) noexcept : widget{w} {}
@@ -44,7 +44,7 @@ namespace zs {
   using DetailsPanel = std::variant<std::monostate, AssetBrowserDetailPanel, SequencerDetailPanel,
                                     GraphEditorDetailPanel, SceneEditorDetailPanel>;
 
-  struct DetailsWidgetComponent : WidgetComponentConcept {
+  struct DetailsWidgetComponent : WidgetConcept {
     enum inherent_widget_e {
       none_ = 0,
       asset_browser_,

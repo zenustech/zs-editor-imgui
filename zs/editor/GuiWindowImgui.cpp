@@ -25,14 +25,17 @@ namespace zs {
   namespace bp = boost::process;
 
   void GUIWindow::setupGUI() {
-    rootWidget = InternalWidget{std::make_shared<WindowWidgetNode>(
+    globalWidget = WindowWidgetNode(
         "Root", nullptr,
         ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar
             | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
-            | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus)};
-    rootWidget.setupMessageQueue();
+            | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus);
 
-    WindowWidgetNode &globalWidget = refGlobalWidget();
+    // rootWidget.setupMessageQueue();
+    states._eventQueue.setupMessageQueue();
+
+    // WindowWidgetNode &globalWidget = refGlobalWidget();
+    WindowWidgetNode &globalWidget = this->globalWidget;
 
     globalWidget.setStyle(ImGuiStyleVar_WindowRounding, 0.0f);
     globalWidget.setStyle(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -511,7 +514,7 @@ namespace zs {
   }
 
   void GUIWindow::drawGUI() {
-    rootWidget.paint();
+    globalWidget.paint();
     ImGui::ShowDemoWindow();
   }
 

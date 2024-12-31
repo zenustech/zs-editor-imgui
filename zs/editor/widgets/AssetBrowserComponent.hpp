@@ -22,7 +22,7 @@ namespace zs {
                                                              int item_curr_idx_to_select);
   };
 
-  struct AssetBrowserComponent : WidgetComponentConcept {
+  struct AssetBrowserComponent : WidgetConcept {
     using AssetEntries = std::deque<UniquePtr<AssetEntry>>;
     using AssetPtr = AssetEntry *;
 
