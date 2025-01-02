@@ -218,6 +218,16 @@ bool GUIWindow::beginFrame() {
   states.sceneEditor.get().update(io.DeltaTime);
 
   ImGui::NewFrame();
+
+  /// @brief custom gui event loop!
+  // generate and post imgui events
+  generateImguiGuiEvents();
+  std::vector<GuiEvent *> unhandled;
+  states._eventQueue.postEvents(&globalWidget, &unhandled);
+  processRemainingEvents(unhandled);
+  /// @note more complex events might be newly setup
+  states._eventQueue.postEvents(&globalWidget, nullptr);
+
   ImGui::PushFont((ImFont *)ImguiSystem::get_font(ImguiSystem::cn_font));
   ImGuizmo::BeginFrame();
 

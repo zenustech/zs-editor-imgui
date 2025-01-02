@@ -307,13 +307,13 @@ namespace zs {
       ImGui::End();
     }
     bool onEvent(GuiEvent *e) override {
-      bool ret = false;
       for (auto &comp : components) {
-        ret |= match([e](WidgetNode &widgetComponent) { return widgetComponent.onEvent(e); },
-                     [e](Shared<WindowWidgetNode> &windowNode) { return windowNode->onEvent(e); })(
-            comp._widget);
+        if (match([e](WidgetNode &widgetComponent) { return widgetComponent.onEvent(e); },
+                  [e](Shared<WindowWidgetNode> &windowNode) { return windowNode->onEvent(e); })(
+                comp._widget))
+          return true;
       }
-      return ret;
+      return false;
     }
     /// manage components
     template <typename ChildT> void appendComponent(ChildT &&widget) {

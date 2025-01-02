@@ -26,6 +26,7 @@
 #include "editor/widgets/TextEditorComponent.hpp"
 #include "editor/widgets/WidgetBase.hpp"
 #include "interface/world/ObjectInterface.hpp"
+#include "world/async/StateMachine.hpp"
 #include "world/system/PyExecSystem.hpp"
 
 struct ImGuiViewport;
@@ -200,8 +201,11 @@ namespace zs {
       bool wantUpdateMonitors = false;
       bool framebufferResized = false;
 
-      // glfw callbacks
+      // imgui event queue
       GuiEventHub _eventQueue;
+      StateMachine _mouseState;
+
+      // glfw callbacks
       // window cb
       zs::Signal<void(GLFWmonitor *, int)> monitorCb;
       zs::Signal<void(int, int, float)> resizeCb;
@@ -224,6 +228,8 @@ namespace zs {
 
     // WindowWidgetNode &refGlobalWidget() { return *rootWidget.widget<WindowWidgetNode>(); }
     WindowWidgetNode &refGlobalWidget() { return globalWidget; }
+    void generateImguiGuiEvents();
+    void processRemainingEvents(const std::vector<GuiEvent *> &evs);
 
   protected:
     friend struct ImguiSystem;

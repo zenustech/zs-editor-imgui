@@ -16,13 +16,78 @@
 #include "editor/widgets/ResourceWidgetComponent.hpp"
 #include "editor/widgets/SequencerComponent.hpp"
 #include "interface/details/PyHelper.hpp"
+#include "widgets/WidgetEvent.hpp"
 #include "world/system/ResourceSystem.hpp"
 
 /// @note goto https://fonts.google.com/icons?icon.size=24&icon.color=%235f6368 for icon overview
+#include "imgui.h"
 
 namespace zs {
 
   namespace bp = boost::process;
+
+  zs::StateMachine imgui_mouse_statemachine(GuiEventHub &eventQueue) {
+    int phase = 0;
+    std::array<ImVec2, 2> poses;
+    std::array<double, 2> times;
+    ImGuiMouseButton lastButton{-1};
+    int accumClickTimes = 0;
+    auto &io = ImGui::GetIO();
+
+  released: {
+    auto e_ = co_await zs::Event<MousePressEvent *>{};
+    auto e = std::get<MousePressEvent *>(e_);
+    if (e->source() != ImGuiMouseSource_Mouse) {
+      goto released;  // only focus on mouse event
+    }
+    auto button = e->button();
+    auto pos = e->windowPos();
+    auto time = e->time();
+    // check whether reset click progress
+    if (button != lastButton && lastButton != -1) {
+      phase = 0;  // new button clicking
+    } else if (phase == 1) {
+      int prevPhase = 0;
+      if (time - times[prevPhase] > io.MouseDoubleClickTime) {
+        phase = 0;
+      } else if (ImVec2 delta = pos - poses[prevPhase];
+                 ImLengthSqr(delta) > io.MouseDoubleClickMaxDist * io.MouseDoubleClickMaxDist) {
+        phase = 0;
+      }
+    }
+
+    lastButton = button;
+    poses[phase] = pos;
+    times[phase] = time;
+    goto pressed;
+  }
+  pressed: {
+    // [phase] already filled by press event
+    auto e_ = co_await zs::Event<MouseReleaseEvent *>{};
+    auto e = std::get<MouseReleaseEvent *>(e_);
+    if (e->source() != ImGuiMouseSource_Mouse) goto pressed;  // only focus on mouse event
+    auto button = e->button();
+    if (button != lastButton) goto pressed;  // ignore this irrelevant event
+
+    auto pos = e->windowPos();
+    auto time = e->time();
+
+    if (time - times[phase] > io.MouseDoubleClickTime) {
+      phase = 0;
+    } else if (ImVec2 delta = pos - poses[phase];
+               ImLengthSqr(delta) > io.MouseDoubleClickMaxDist * io.MouseDoubleClickMaxDist) {
+      phase = 0;
+    } else
+      phase++;
+    if (phase == 2) {
+      eventQueue.addEvent(
+          new MouseDoubleClickEvent({poses[0], button, time, e->modifiers(), e->source()}));
+      puts("DOUBLE CLICKED!");
+      phase = 0;
+    }
+    goto released;
+  }
+  }
 
   void GUIWindow::setupGUI() {
     globalWidget = WindowWidgetNode(
@@ -511,11 +576,91 @@ namespace zs {
     }});
 #endif
     globalWidget.appendChild(move(propertyWidget));
+
+    states._mouseState = zs::move(imgui_mouse_statemachine(states._eventQueue));
   }
 
   void GUIWindow::drawGUI() {
     globalWidget.paint();
     ImGui::ShowDemoWindow();
+  }
+
+  void GUIWindow::processRemainingEvents(const std::vector<GuiEvent *> &evs) {
+    if (evs.size()) {
+      for (auto e : evs) {
+        switch (e->getType()) {
+          // mouse
+          case gui_event_mousePressed: {
+            auto e_ = dynamic_cast<MousePressEvent *>(e);
+            states._mouseState.onEvent(e_);
+            delete e_;
+            break;
+          }
+          case gui_event_mouseReleased: {
+            auto e_ = dynamic_cast<MouseReleaseEvent *>(e);
+            states._mouseState.onEvent(e_);
+            delete e_;
+            break;
+          }
+          case gui_event_mouseMoved: {
+            auto e_ = dynamic_cast<MouseMoveEvent *>(e);
+            states._mouseState.onEvent(e_);
+            delete e_;
+            break;
+          }
+          //
+          default:
+            break;
+        }
+      }
+    }
+  }
+
+  void GUIWindow::generateImguiGuiEvents() {
+    static u64 cnt = 0;
+    auto &io = ImGui::GetIO();
+    // mouse
+    for (int m = 0; m < ImGuiMouseButton_COUNT; m++) {
+      // 0: ImGuiMouseButton_Left, 1: ImGuiMouseButton_Right, 2: ImGuiMouseButton_Middle
+      // IsMouse(Double)Clicked is not performing as intended
+      // https://github.com/ocornut/imgui/issues/2385
+      if (ImGui::IsKeyPressed(ImGui::MouseButtonToKey(m), false)) {
+        // fmt::print("[{}]\timgui mouse: PRESSED!\n", cnt);
+        states._eventQueue.addEvent(
+            new MousePressEvent{{io.MousePos,
+                                 m,
+                                 states.time,
+                                 {.ctrl = ImGui::IsKeyDown(ImGuiKey_LeftCtrl),
+                                  .shift = ImGui::IsKeyDown(ImGuiKey_LeftShift),
+                                  .alt = ImGui::IsKeyDown(ImGuiKey_LeftAlt),
+                                  .super = ImGui::IsKeyDown(ImGuiKey_LeftSuper)},
+                                 ImGuiMouseSource_Mouse}});
+      } else if (ImGui::IsMouseReleased(m)) {
+        states._eventQueue.addEvent(
+            new MouseReleaseEvent{{io.MousePos,
+                                   m,
+                                   states.time,
+                                   {.ctrl = ImGui::IsKeyDown(ImGuiKey_LeftCtrl),
+                                    .shift = ImGui::IsKeyDown(ImGuiKey_LeftShift),
+                                    .alt = ImGui::IsKeyDown(ImGuiKey_LeftAlt),
+                                    .super = ImGui::IsKeyDown(ImGuiKey_LeftSuper)},
+                                   ImGuiMouseSource_Mouse}});
+        // fmt::print("[{}]\timgui mouse: RELEASED!\n", cnt);
+      }
+    }
+    if (io.MouseDelta[0] != 0.f || io.MouseDelta[1] != 0.f) {
+      // fmt::print("[{}]\timgui mouse: MOVING ({}, {})!\n", cnt, io.MouseDelta[0],
+      // io.MouseDelta[1]);
+    }
+    // key
+    for (int k_ = ImGuiKey_Keyboard_BEGIN; k_ < ImGuiKey_Keyboard_END; k_++) {
+      ImGuiKey k = (ImGuiKey)k_;
+      if (!ImGui::IsNamedKeyOrMod(k)) continue;
+      if (ImGui::IsKeyPressed(k, false)) {
+        ;
+      }
+    }
+    cnt++;
   }
 
 }  // namespace zs

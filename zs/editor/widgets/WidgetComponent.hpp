@@ -3,6 +3,7 @@
 #include <string>
 #include <variant>
 
+#include "WidgetEvent.hpp"
 #include "editor/ImguiSystem.hpp"
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -56,7 +57,7 @@ namespace zs {
       _msgQueue = new GuiEventQueue;
       _ownQueue = true;
     }
-    void postEvents(WidgetConcept *receiver) {
+    void postEvents(WidgetConcept *receiver, std::vector<GuiEvent *> *pUnhandled = nullptr) {
       assert(_msgQueue && receiver);
       auto &q = *_msgQueue;
       std::array<GuiEvent *, 512> evs;
@@ -64,7 +65,20 @@ namespace zs {
         for (int i = 0; i < n; ++i) {
           receiver->onEvent(evs[i]);
         }
+        for (int i = 0; i < n; ++i) {
+          if (evs[i]->isAccepted() || !pUnhandled)
+            delete evs[i];
+          else if (pUnhandled) {
+            pUnhandled->push_back(evs[i]);
+          }
+        }
       }
+    }
+
+    template <typename E, enable_if_t<is_base_of_v<GuiEvent, remove_cv_t<E>>> = 0>
+    void addEvent(E *e) {
+      assert(_msgQueue);
+      _msgQueue->enqueue(e);
     }
 
   protected:
@@ -76,6 +90,8 @@ namespace zs {
     ;
     // properties
     // status
+    bool _retainedAlike{false};
+    bool _mouseTracking{false};  // tracking mouse move
     bool _focused{false}, _hovered{true};
   };
   struct WidgetNode : WidgetBase, WidgetConcept {
