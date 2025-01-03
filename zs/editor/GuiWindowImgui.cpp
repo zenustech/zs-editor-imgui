@@ -26,20 +26,23 @@ namespace zs {
 
   namespace bp = boost::process;
 
-  zs::StateMachine imgui_mouse_statemachine(GuiEventHub &eventQueue) {
+  static zs::StateMachine imgui_mouse_statemachine(GuiEventHub &eventQueue) {
     int phase = 0;
     std::array<ImVec2, 2> poses;
     std::array<double, 2> times;
     ImGuiMouseButton lastButton{-1};
-    int accumClickTimes = 0;
     auto &io = ImGui::GetIO();
 
   released: {
     auto e_ = co_await zs::Event<MousePressEvent *>{};
     auto e = std::get<MousePressEvent *>(e_);
     if (e->source() != ImGuiMouseSource_Mouse) {
-      goto released;  // only focus on mouse event
+      e->ignore();
+      goto released;  // only focus on mouse event (ignore pen, touchscreen ftm)
     }
+
+    e->accept();
+
     auto button = e->button();
     auto pos = e->windowPos();
     auto time = e->time();
@@ -65,9 +68,17 @@ namespace zs {
     // [phase] already filled by press event
     auto e_ = co_await zs::Event<MouseReleaseEvent *>{};
     auto e = std::get<MouseReleaseEvent *>(e_);
-    if (e->source() != ImGuiMouseSource_Mouse) goto pressed;  // only focus on mouse event
+    if (e->source() != ImGuiMouseSource_Mouse) {
+      e->ignore();
+      goto pressed;  // only focus on mouse event
+    }
     auto button = e->button();
-    if (button != lastButton) goto pressed;  // ignore this irrelevant event
+    if (button != lastButton) {
+      e->ignore();
+      goto pressed;  // ignore this irrelevant event
+    }
+
+    e->accept();
 
     auto pos = e->windowPos();
     auto time = e->time();
@@ -83,6 +94,69 @@ namespace zs {
       eventQueue.addEvent(
           new MouseDoubleClickEvent({poses[0], button, time, e->modifiers(), e->source()}));
       puts("DOUBLE CLICKED!");
+      phase = 0;
+    }
+    goto released;
+  }
+  }
+  static zs::StateMachine imgui_keyboard_statemachine(GuiEventHub &eventQueue) {
+    int phase = 0;
+    std::array<double, 2> times;
+    ImGuiKey lastKey{ImGuiKey_None};
+    auto &io = ImGui::GetIO();
+
+  released: {
+    auto e_ = co_await zs::Event<KeyPressEvent *>{};
+    auto e = std::get<KeyPressEvent *>(e_);
+    if (e->source() != ImGuiInputSource_Keyboard) {
+      e->ignore();
+      goto released;  // only focus on keyboard event
+    }
+
+    e->accept();
+
+    auto key = e->key();
+    auto time = e->time();
+    // check whether reset click progress
+    if (key != lastKey && lastKey != -1) {
+      phase = 0;  // new key clicking
+    } else if (phase == 1) {
+      int prevPhase = 0;
+      if (time - times[prevPhase] > io.MouseDoubleClickTime) {
+        phase = 0;
+      }
+    }
+
+    lastKey = key;
+    times[phase] = time;
+    goto pressed;
+  }
+  pressed: {
+    // [phase] already filled by press event
+    auto e_ = co_await zs::Event<KeyReleaseEvent *>{};
+    auto e = std::get<KeyReleaseEvent *>(e_);
+    if (e->source() != ImGuiInputSource_Keyboard) {
+      e->ignore();
+      goto pressed;  // only focus on keyboard event
+    }
+    auto key = e->key();
+    if (key != lastKey) {
+      e->ignore();
+      goto pressed;  // ignore this irrelevant event
+    }
+
+    e->accept();
+
+    auto time = e->time();
+
+    if (time - times[phase] > io.MouseDoubleClickTime) {
+      phase = 0;
+    } else
+      phase++;
+    if (phase == 2) {
+      // eventQueue.addEvent(
+      //    new MouseDoubleClickEvent({poses[0], button, time, e->modifiers(), e->source()}));
+      fmt::print("KEY [{}] DOUBLE CLICKED!\n", e->keyName());
       phase = 0;
     }
     goto released;
@@ -578,6 +652,7 @@ namespace zs {
     globalWidget.appendChild(move(propertyWidget));
 
     states._mouseState = zs::move(imgui_mouse_statemachine(states._eventQueue));
+    states._keyState = zs::move(imgui_keyboard_statemachine(states._eventQueue));
   }
 
   void GUIWindow::drawGUI() {
@@ -585,7 +660,7 @@ namespace zs {
     ImGui::ShowDemoWindow();
   }
 
-  void GUIWindow::processRemainingEvents(const std::vector<GuiEvent *> &evs) {
+  void GUIWindow::tryConsumingRemainingEvents(const std::vector<GuiEvent *> &evs) {
     if (evs.size()) {
       for (auto e : evs) {
         switch (e->getType()) {
@@ -593,7 +668,7 @@ namespace zs {
           case gui_event_mousePressed: {
             auto e_ = dynamic_cast<MousePressEvent *>(e);
             states._mouseState.onEvent(e_);
-            delete e_;
+            delete e_;  // deleted no matter accepted or not
             break;
           }
           case gui_event_mouseReleased: {
@@ -608,7 +683,19 @@ namespace zs {
             delete e_;
             break;
           }
-          //
+          // key
+          case gui_event_keyPressed: {
+            auto e_ = dynamic_cast<KeyPressEvent *>(e);
+            states._keyState.onEvent(e_);
+            delete e_;
+            break;
+          }
+          case gui_event_keyReleased: {
+            auto e_ = dynamic_cast<KeyReleaseEvent *>(e);
+            states._keyState.onEvent(e_);
+            delete e_;
+            break;
+          }
           default:
             break;
         }
@@ -616,49 +703,100 @@ namespace zs {
     }
   }
 
-  void GUIWindow::generateImguiGuiEvents() {
+  void GUIWindow::spawnImguiEvents() {
     static u64 cnt = 0;
     auto &io = ImGui::GetIO();
-    // mouse
+    /*
+    {.ctrl = ImGui::IsKeyDown(ImGuiKey_LeftCtrl),
+     .shift = ImGui::IsKeyDown(ImGuiKey_LeftShift),
+     .alt = ImGui::IsKeyDown(ImGuiKey_LeftAlt),
+     .super = ImGui::IsKeyDown(ImGuiKey_LeftSuper)}
+    */
+    ///
+    /// mouse
+    ///
+    // button
     for (int m = 0; m < ImGuiMouseButton_COUNT; m++) {
       // 0: ImGuiMouseButton_Left, 1: ImGuiMouseButton_Right, 2: ImGuiMouseButton_Middle
       // IsMouse(Double)Clicked is not performing as intended
       // https://github.com/ocornut/imgui/issues/2385
       if (ImGui::IsKeyPressed(ImGui::MouseButtonToKey(m), false)) {
         // fmt::print("[{}]\timgui mouse: PRESSED!\n", cnt);
-        states._eventQueue.addEvent(
-            new MousePressEvent{{io.MousePos,
-                                 m,
-                                 states.time,
-                                 {.ctrl = ImGui::IsKeyDown(ImGuiKey_LeftCtrl),
-                                  .shift = ImGui::IsKeyDown(ImGuiKey_LeftShift),
-                                  .alt = ImGui::IsKeyDown(ImGuiKey_LeftAlt),
-                                  .super = ImGui::IsKeyDown(ImGuiKey_LeftSuper)},
-                                 ImGuiMouseSource_Mouse}});
+        states._eventQueue.addEvent(new MousePressEvent{
+            {io.MousePos,
+             m,
+             states.time,
+             {.ctrl = io.KeyCtrl, .shift = io.KeyShift, .alt = io.KeyAlt, .super = io.KeySuper},
+             ImGuiMouseSource_Mouse}});
       } else if (ImGui::IsMouseReleased(m)) {
-        states._eventQueue.addEvent(
-            new MouseReleaseEvent{{io.MousePos,
-                                   m,
-                                   states.time,
-                                   {.ctrl = ImGui::IsKeyDown(ImGuiKey_LeftCtrl),
-                                    .shift = ImGui::IsKeyDown(ImGuiKey_LeftShift),
-                                    .alt = ImGui::IsKeyDown(ImGuiKey_LeftAlt),
-                                    .super = ImGui::IsKeyDown(ImGuiKey_LeftSuper)},
-                                   ImGuiMouseSource_Mouse}});
+        states._eventQueue.addEvent(new MouseReleaseEvent{
+            {io.MousePos,
+             m,
+             states.time,
+             {.ctrl = io.KeyCtrl, .shift = io.KeyShift, .alt = io.KeyAlt, .super = io.KeySuper},
+             ImGuiMouseSource_Mouse}});
         // fmt::print("[{}]\timgui mouse: RELEASED!\n", cnt);
       }
     }
-    if (io.MouseDelta[0] != 0.f || io.MouseDelta[1] != 0.f) {
-      // fmt::print("[{}]\timgui mouse: MOVING ({}, {})!\n", cnt, io.MouseDelta[0],
-      // io.MouseDelta[1]);
+    // scroll
+    if (io.MouseWheel != 0.f || io.MouseWheelH != 0.f) {
+      states._eventQueue.addEvent(new MouseScrollEvent{
+          {io.MousePos,
+           ImGuiMouseButton_Middle,
+           states.time,
+           {.ctrl = io.KeyCtrl, .shift = io.KeyShift, .alt = io.KeyAlt, .super = io.KeySuper},
+           ImGuiMouseSource_Mouse},
+          io.MouseWheel,
+          io.MouseWheelH});
     }
-    // key
+    // move
+    if (io.MouseDelta[0] != 0.f || io.MouseDelta[1] != 0.f) {
+      states._eventQueue.addEvent(new MouseMoveEvent{
+          {io.MousePos,
+           -1,
+           states.time,
+           {.ctrl = io.KeyCtrl, .shift = io.KeyShift, .alt = io.KeyAlt, .super = io.KeySuper},
+           ImGuiMouseSource_Mouse},
+          io.MouseDelta});
+    }
+
+    ///
+    /// keyboard
+    ///
     for (int k_ = ImGuiKey_Keyboard_BEGIN; k_ < ImGuiKey_Keyboard_END; k_++) {
       ImGuiKey k = (ImGuiKey)k_;
-      if (!ImGui::IsNamedKeyOrMod(k)) continue;
-      if (ImGui::IsKeyPressed(k, false)) {
-        ;
+      if (ImGui::IsKeyPressed(k, false)) {  // initial
+        states._eventQueue.addEvent(new KeyPressEvent{
+            {k,
+             states.time,
+             {.ctrl = io.KeyCtrl, .shift = io.KeyShift, .alt = io.KeyAlt, .super = io.KeySuper},
+             false}});
+      } else if (ImGui::IsKeyPressed(k, true)) {  // repeat
+        states._eventQueue.addEvent(new KeyPressEvent{
+            {k,
+             states.time,
+             {.ctrl = io.KeyCtrl, .shift = io.KeyShift, .alt = io.KeyAlt, .super = io.KeySuper},
+             true}});
+      } else if (ImGui::IsKeyReleased(k)) {
+        states._eventQueue.addEvent(new KeyReleaseEvent{
+            {k,
+             states.time,
+             {.ctrl = io.KeyCtrl, .shift = io.KeyShift, .alt = io.KeyAlt, .super = io.KeySuper},
+             false}});
+        // fmt::print("[{}]\timgui mouse: RELEASED!\n", cnt);
       }
+    }
+    // character
+    for (int i = 0; i < io.InputQueueCharacters.Size; i++) {
+      ImWchar c = io.InputQueueCharacters[i];
+      states._eventQueue.addEvent(new KeyCharacterEvent{
+          {ImGuiKey_None,
+           states.time,
+           {.ctrl = io.KeyCtrl, .shift = io.KeyShift, .alt = io.KeyAlt, .super = io.KeySuper},
+           false},
+          c});
+      // control characters [0-31], remaining printable
+      // space: 32
     }
     cnt++;
   }

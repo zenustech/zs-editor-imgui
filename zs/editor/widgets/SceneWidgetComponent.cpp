@@ -6,5 +6,6 @@ namespace zs {
     ;
     ;
   }
+  bool SceneEditorWidgetComponent::onEvent(GuiEvent* e) { return true; }
 
 }  // namespace zs

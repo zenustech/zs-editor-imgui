@@ -204,6 +204,7 @@ namespace zs {
       // imgui event queue
       GuiEventHub _eventQueue;
       StateMachine _mouseState;
+      StateMachine _keyState;
 
       // glfw callbacks
       // window cb
@@ -228,8 +229,8 @@ namespace zs {
 
     // WindowWidgetNode &refGlobalWidget() { return *rootWidget.widget<WindowWidgetNode>(); }
     WindowWidgetNode &refGlobalWidget() { return globalWidget; }
-    void generateImguiGuiEvents();
-    void processRemainingEvents(const std::vector<GuiEvent *> &evs);
+    void spawnImguiEvents();
+    void tryConsumingRemainingEvents(const std::vector<GuiEvent *> &evs);
 
   protected:
     friend struct ImguiSystem;

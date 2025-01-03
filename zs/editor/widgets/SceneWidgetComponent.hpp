@@ -9,6 +9,8 @@ namespace zs {
   struct SceneEditorWidgetComponent : WidgetConcept {
     void paint() override;
 
+    bool onEvent(GuiEvent* e) override;
+
     SceneEditor* sceneEditor;
   };
 

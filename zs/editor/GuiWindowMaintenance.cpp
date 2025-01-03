@@ -221,12 +221,13 @@ bool GUIWindow::beginFrame() {
 
   /// @brief custom gui event loop!
   // generate and post imgui events
-  generateImguiGuiEvents();
+  spawnImguiEvents();
   std::vector<GuiEvent *> unhandled;
   states._eventQueue.postEvents(&globalWidget, &unhandled);
-  processRemainingEvents(unhandled);
+  tryConsumingRemainingEvents(unhandled);
   /// @note more complex events might be newly setup
   states._eventQueue.postEvents(&globalWidget, nullptr);
+  // done processing (im)gui events
 
   ImGui::PushFont((ImFont *)ImguiSystem::get_font(ImguiSystem::cn_font));
   ImGuizmo::BeginFrame();

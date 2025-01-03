@@ -135,6 +135,7 @@ add_executable(zs_editor_imgui
 	zs/editor/widgets/GraphWidgetPin.cpp
 	zs/editor/widgets/GraphWidgetLink.cpp
 
+	zs/editor/widgets/WidgetEvent.cpp
 	zs/editor/widgets/WidgetComponent.cpp
 	zs/editor/widgets/ResourceWidgetComponent.cpp
 
