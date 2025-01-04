@@ -663,7 +663,7 @@ namespace zs {
   void GUIWindow::tryConsumingRemainingEvents(const std::vector<GuiEvent *> &evs) {
     if (evs.size()) {
       for (auto e : evs) {
-        switch (e->getType()) {
+        switch (e->getGuiEventType()) {
           // mouse
           case gui_event_mousePressed: {
             auto e_ = dynamic_cast<MousePressEvent *>(e);

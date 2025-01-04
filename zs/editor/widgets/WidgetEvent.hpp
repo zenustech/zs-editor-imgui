@@ -32,12 +32,12 @@ namespace zs {
 
   struct MousePressEvent : virtual MouseEvent {
     MousePressEvent(MouseEvent &&ev) noexcept : MouseEvent{zs::move(ev)} {}
-    gui_event_e getType() const { return gui_event_mousePressed; }
+    gui_event_e getGuiEventType() const { return gui_event_mousePressed; }
   };
 
   struct MouseReleaseEvent : virtual MouseEvent {
     MouseReleaseEvent(MouseEvent &&ev) noexcept : MouseEvent{zs::move(ev)} {}
-    gui_event_e getType() const { return gui_event_mouseReleased; }
+    gui_event_e getGuiEventType() const { return gui_event_mouseReleased; }
   };
 
   struct MouseMoveEvent : virtual MouseEvent {
@@ -45,12 +45,12 @@ namespace zs {
 
     MouseMoveEvent(MouseEvent &&ev, const ImVec2 &delta) noexcept
         : MouseEvent{zs::move(ev)}, _delta{delta} {}
-    gui_event_e getType() const { return gui_event_mouseMoved; }
+    gui_event_e getGuiEventType() const { return gui_event_mouseMoved; }
   };
 
   struct MouseDoubleClickEvent : virtual MouseEvent {
     MouseDoubleClickEvent(MouseEvent &&ev) noexcept : MouseEvent{zs::move(ev)} {}
-    gui_event_e getType() const { return gui_event_mouseDoubleClicked; }
+    gui_event_e getGuiEventType() const { return gui_event_mouseDoubleClicked; }
   };
 
   struct MouseScrollEvent : virtual MouseEvent {
@@ -59,7 +59,7 @@ namespace zs {
 
     MouseScrollEvent(MouseEvent &&ev, float wheelV, float wheelH) noexcept
         : MouseEvent{zs::move(ev)}, _wheelV{wheelV}, _wheelH{wheelH} {}
-    gui_event_e getType() const { return gui_event_mouseScroll; }
+    gui_event_e getGuiEventType() const { return gui_event_mouseScroll; }
   };
 
   ///
@@ -94,18 +94,18 @@ namespace zs {
   };
   struct KeyPressEvent : virtual KeyEvent {
     KeyPressEvent(KeyEvent &&ev) noexcept : KeyEvent{zs::move(ev)} {}
-    gui_event_e getType() const { return gui_event_keyPressed; }
+    gui_event_e getGuiEventType() const { return gui_event_keyPressed; }
   };
 
   struct KeyReleaseEvent : virtual KeyEvent {
     KeyReleaseEvent(KeyEvent &&ev) noexcept : KeyEvent{zs::move(ev)} {}
-    gui_event_e getType() const { return gui_event_keyReleased; }
+    gui_event_e getGuiEventType() const { return gui_event_keyReleased; }
   };
 
   struct KeyCharacterEvent : virtual KeyEvent {
     ImWchar _c{0};
     KeyCharacterEvent(KeyEvent &&ev, ImWchar c) noexcept : KeyEvent{zs::move(ev)}, _c{c} {}
-    gui_event_e getType() const { return gui_event_keyCharacter; }
+    gui_event_e getGuiEventType() const { return gui_event_keyCharacter; }
   };
 
 }  // namespace zs

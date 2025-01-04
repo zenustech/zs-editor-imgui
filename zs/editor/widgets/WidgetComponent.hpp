@@ -110,7 +110,7 @@ namespace zs {
     }
 
     bool onEvent(GuiEvent *e) { return _widget->onEvent(e); }
-    gui_widget_e getType() const { return _widget->getType(); }
+    gui_widget_e getWidgetType() const { return _widget->getWidgetType(); }
 
   private:
     // certain compound widget can have multiple child widgets, managed internally
