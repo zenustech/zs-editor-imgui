@@ -1,10 +1,10 @@
 #include "SceneEditor.hpp"
-#include "imgui_internal.h"
 #include "editor/widgets/WidgetDrawUtilities.hpp"
+#include "imgui_internal.h"
 //
 #include "IconsMaterialSymbols.h"
-#include "imgui.h"
 #include "editor/widgets/WidgetComponent.hpp"
+#include "imgui.h"
 //
 #include "zensim/ZpcFunctional.hpp"
 //
@@ -18,6 +18,38 @@
 
 namespace zs {
 
+  static StateMachine camera_control_statemachine(CameraControl &cameraCtrl) {
+    Camera &camera = *cameraCtrl._cam;
+    for (;;) {
+      auto e = co_await zs::Event<KeyPressEvent *, KeyReleaseEvent *, MousePressEvent *,
+                                  MouseReleaseEvent *, MouseMoveEvent *>{};
+      match(
+          [](KeyPressEvent *e) {
+            ;
+            ;
+          },
+          [](KeyReleaseEvent *e) {
+            ;
+            ;
+          },
+          [](MousePressEvent *e) {
+            ;
+            ;
+          },
+          [](MouseReleaseEvent *e) {
+            ;
+            ;
+          },
+          [](MouseMoveEvent *e) {
+            ;
+            ;
+          })(e);
+    }
+  }
+  void CameraControl::trackCamera(Camera &camera) {
+    _cam = zs::addressof(camera);
+    _cameraState = camera_control_statemachine(*this);  // reset state
+  }
   ActionWidgetComponent get_widget(Camera &camera, void *sceneEditor_) {
     SceneEditor *sceneEditor = static_cast<SceneEditor *>(sceneEditor_);
     return [&camera, zclip = zs::vec<float, 2>{camera.getNearClip(), camera.getFarClip()},
