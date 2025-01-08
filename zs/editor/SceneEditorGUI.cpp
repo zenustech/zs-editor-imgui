@@ -18,31 +18,72 @@
 
 namespace zs {
 
+  void CameraControl::setKeyState(int idx, int state) noexcept {
+    assert(idx >= 0 && idx < num_directions);
+    _keyStates[idx] = state;
+  }
+  int CameraControl::findDirectionIndex(ImGuiKey key) const noexcept {
+    for (int idx = 0; idx < num_directions; ++idx)
+      if (_keyBindings[idx] == key) return idx;
+    return -1;
+  }
+  int CameraControl::findMouseAction(ImGuiMouseButton mouse) const noexcept {
+    for (int idx = 0; idx < num_mouse_bindings; ++idx)
+      if (_mouseBindings[idx] == mouse) return idx;
+    return -1;
+  }
+
   static StateMachine camera_control_statemachine(CameraControl &cameraCtrl) {
-    Camera &camera = *cameraCtrl._cam;
+    int activeMouseButton = 0;  // ImGuiMouseButton
+    int mouseAction = -1;
     for (;;) {
       auto e = co_await zs::Event<KeyPressEvent *, KeyReleaseEvent *, MousePressEvent *,
                                   MouseReleaseEvent *, MouseMoveEvent *>{};
       match(
-          [](KeyPressEvent *e) {
-            ;
-            ;
+          [&cameraCtrl](KeyPressEvent *e) {
+            auto idx = cameraCtrl.findDirectionIndex(e->key());
+            cameraCtrl.setKeyState(idx, 1);
           },
-          [](KeyReleaseEvent *e) {
-            ;
-            ;
+          [&cameraCtrl](KeyReleaseEvent *e) {
+            auto idx = cameraCtrl.findDirectionIndex(e->key());
+            cameraCtrl.setKeyState(idx, 0);
           },
-          [](MousePressEvent *e) {
-            ;
-            ;
+          [&cameraCtrl, &mouseAction, &activeMouseButton](MousePressEvent *e) {
+            auto idx = cameraCtrl.findMouseAction(e->button());
+            if (idx != -1) {
+              activeMouseButton = e->button();
+              mouseAction = idx;
+            }
           },
-          [](MouseReleaseEvent *e) {
-            ;
-            ;
+          [&cameraCtrl, &mouseAction, &activeMouseButton](MouseReleaseEvent *e) {
+            if (activeMouseButton == e->button()) {
+              activeMouseButton = -1;
+              mouseAction = -1;
+            }
           },
-          [](MouseMoveEvent *e) {
-            ;
-            ;
+          [&cameraCtrl, &mouseAction](MouseMoveEvent *e) {
+            Camera &camera = *cameraCtrl._cam;
+            auto delta = e->getDelta();
+            switch (mouseAction) {
+              case CameraControl::mouse_action_e::rotate: {
+                camera.yaw(delta.x * cameraCtrl._rotationSpeed);
+                camera.pitch(-delta.y * cameraCtrl._rotationSpeed);
+                // camera.updateViewMatrix();
+                // editor.sceneAugmentRenderer.overlayTextNeedUpdate = true;
+                break;
+              }
+              case CameraControl::mouse_action_e::translate_side: {
+                camera.translateHorizontal(-delta.x * cameraCtrl._sideTranslationSpeed);
+                camera.translateVertical(delta.y * cameraCtrl._sideTranslationSpeed);
+                break;
+              }
+              case CameraControl::mouse_action_e::translate_advance: {
+                camera.translateForward(-delta.x * cameraCtrl._advanceTranslationSpeed);
+                camera.translateHorizontal(delta.y * cameraCtrl._advanceTranslationSpeed);
+                break;
+              }
+              default:;
+            }
           })(e);
     }
   }

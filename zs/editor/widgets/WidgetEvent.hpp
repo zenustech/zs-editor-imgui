@@ -43,6 +43,8 @@ namespace zs {
   struct MouseMoveEvent : virtual MouseEvent {
     ImVec2 _delta{0.f, 0.f};
 
+    ImVec2 getDelta() const noexcept { return {_delta.x, _delta.y}; }
+
     MouseMoveEvent(MouseEvent &&ev, const ImVec2 &delta) noexcept
         : MouseEvent{zs::move(ev)}, _delta{delta} {}
     gui_event_e getGuiEventType() const { return gui_event_mouseMoved; }

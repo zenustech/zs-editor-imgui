@@ -38,17 +38,36 @@ namespace zs {
   struct CameraControl {
     void trackCamera(Camera &camera);
 
+    enum key_direction_e : int {
+      front,
+      back,
+      left,
+      right,
+      turn_left,
+      turn_right,
+      look_up,
+      look_down,
+      num_directions
+    };
+    enum mouse_action_e : int { rotate = 0, translate_side, translate_advance, num_mouse_bindings };
+
+    void setKeyState(int idx, int state) noexcept;
+    int findDirectionIndex(ImGuiKey key) const noexcept;
+    int findMouseAction(ImGuiMouseButton key) const noexcept;
+
+    Signal<void(const glm::vec3 &)> _positionChanged;
+    Signal<void(const glm::vec3 &)> _orientationChanged;
+
     Camera *_cam;
     StateMachine _cameraState;
-    // config
-    ImGuiKey _forwardKey = ImGuiKey_W;
-    ImGuiKey _backwardKey = ImGuiKey_S;
-    ImGuiKey _leftKey = ImGuiKey_A;
-    ImGuiKey _rightKey = ImGuiKey_D;
-    ImGuiKey _turnLeftKey = ImGuiKey_Q;
-    ImGuiKey _turnRightKey = ImGuiKey_E;
-    ImGuiKey _lookUpKey = ImGuiKey_R;
-    ImGuiKey _lookDownKey = ImGuiKey_F;
+    // mouse
+    float _rotationSpeed{0.1f}, _sideTranslationSpeed{0.01f}, _advanceTranslationSpeed{0.02f};
+    ImGuiMouseButton _mouseBindings[num_mouse_bindings]
+        = {ImGuiMouseButton_Left, ImGuiMouseButton_Right, ImGuiMouseButton_Middle};
+    // key
+    int _keyStates[num_directions] = {0, 0, 0, 0, 0, 0, 0, 0};
+    ImGuiKey _keyBindings[num_directions] = {ImGuiKey_W, ImGuiKey_S, ImGuiKey_A, ImGuiKey_D,
+                                             ImGuiKey_Q, ImGuiKey_E, ImGuiKey_R, ImGuiKey_F};
   };
   ActionWidgetComponent get_widget(Camera &camera, void * = nullptr);
 
