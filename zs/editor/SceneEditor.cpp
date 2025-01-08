@@ -696,6 +696,8 @@ void main()
     ///
     sceneRenderData.camera = Camera();
     auto &camera = sceneRenderData.camera.get();
+    _camCtrl.trackCamera(camera);
+
     // camera.type = Camera::CameraType::lookat;
     camera.type = Camera::CameraType::firstperson;
     camera.setReversedZ(SceneEditor::reversedZ);

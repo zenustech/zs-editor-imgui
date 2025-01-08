@@ -37,60 +37,75 @@ namespace zs {
     int activeMouseButton = 0;  // ImGuiMouseButton
     int mouseAction = -1;
     for (;;) {
-      auto e = co_await zs::Event<KeyPressEvent *, KeyReleaseEvent *, MousePressEvent *,
-                                  MouseReleaseEvent *, MouseMoveEvent *>{};
-      match(
-          [&cameraCtrl](KeyPressEvent *e) {
-            auto idx = cameraCtrl.findDirectionIndex(e->key());
-            cameraCtrl.setKeyState(idx, 1);
-          },
-          [&cameraCtrl](KeyReleaseEvent *e) {
-            auto idx = cameraCtrl.findDirectionIndex(e->key());
-            cameraCtrl.setKeyState(idx, 0);
-          },
-          [&cameraCtrl, &mouseAction, &activeMouseButton](MousePressEvent *e) {
-            auto idx = cameraCtrl.findMouseAction(e->button());
-            if (idx != -1) {
-              activeMouseButton = e->button();
-              mouseAction = idx;
+      auto e__ = co_await zs::Event<GuiEvent *>{};
+      auto e_ = std::get<GuiEvent *>(e__);
+
+      switch (e_->getGuiEventType()) {
+        case gui_event_mousePressed: {
+          auto e = dynamic_cast<MousePressEvent *>(e_);
+          auto idx = cameraCtrl.findMouseAction(e->button());
+          if (idx != -1) {
+            activeMouseButton = e->button();
+            mouseAction = idx;
+          }
+          break;
+        }
+        case gui_event_mouseReleased: {
+          auto e = dynamic_cast<MouseReleaseEvent *>(e_);
+          if (activeMouseButton == e->button()) {
+            activeMouseButton = -1;
+            mouseAction = -1;
+          }
+          break;
+        }
+        case gui_event_mouseMoved: {
+          auto e = dynamic_cast<MouseMoveEvent *>(e_);
+          Camera &camera = *cameraCtrl._cam;
+          auto delta = e->getDelta();
+          switch (mouseAction) {
+            case CameraControl::mouse_action_e::rotate: {
+              camera.yaw(delta.x * cameraCtrl._rotationSpeed);
+              camera.pitch(-delta.y * cameraCtrl._rotationSpeed);
+              // camera.updateViewMatrix();
+              // editor.sceneAugmentRenderer.overlayTextNeedUpdate = true;
+              break;
             }
-          },
-          [&cameraCtrl, &mouseAction, &activeMouseButton](MouseReleaseEvent *e) {
-            if (activeMouseButton == e->button()) {
-              activeMouseButton = -1;
-              mouseAction = -1;
+            case CameraControl::mouse_action_e::translate_side: {
+              camera.translateHorizontal(-delta.x * cameraCtrl._sideTranslationSpeed);
+              camera.translateVertical(delta.y * cameraCtrl._sideTranslationSpeed);
+              break;
             }
-          },
-          [&cameraCtrl, &mouseAction](MouseMoveEvent *e) {
-            Camera &camera = *cameraCtrl._cam;
-            auto delta = e->getDelta();
-            switch (mouseAction) {
-              case CameraControl::mouse_action_e::rotate: {
-                camera.yaw(delta.x * cameraCtrl._rotationSpeed);
-                camera.pitch(-delta.y * cameraCtrl._rotationSpeed);
-                // camera.updateViewMatrix();
-                // editor.sceneAugmentRenderer.overlayTextNeedUpdate = true;
-                break;
-              }
-              case CameraControl::mouse_action_e::translate_side: {
-                camera.translateHorizontal(-delta.x * cameraCtrl._sideTranslationSpeed);
-                camera.translateVertical(delta.y * cameraCtrl._sideTranslationSpeed);
-                break;
-              }
-              case CameraControl::mouse_action_e::translate_advance: {
-                camera.translateForward(-delta.x * cameraCtrl._advanceTranslationSpeed);
-                camera.translateHorizontal(delta.y * cameraCtrl._advanceTranslationSpeed);
-                break;
-              }
-              default:;
+            case CameraControl::mouse_action_e::translate_advance: {
+              camera.translateForward(-delta.x * cameraCtrl._advanceTranslationSpeed);
+              camera.translateHorizontal(delta.y * cameraCtrl._advanceTranslationSpeed);
+              break;
             }
-          })(e);
+            default:;
+          }
+          break;
+        }
+        case gui_event_keyPressed: {
+          auto e = dynamic_cast<KeyPressEvent *>(e_);
+          auto idx = cameraCtrl.findDirectionIndex(e->key());
+          cameraCtrl.setKeyState(idx, 1);
+          break;
+        }
+        case gui_event_keyReleased: {
+          auto e = dynamic_cast<KeyReleaseEvent *>(e_);
+          auto idx = cameraCtrl.findDirectionIndex(e->key());
+          cameraCtrl.setKeyState(idx, 0);
+          break;
+        }
+        default:
+          break;
+      }  // end guievent switch
     }
   }
   void CameraControl::trackCamera(Camera &camera) {
     _cam = zs::addressof(camera);
     _cameraState = camera_control_statemachine(*this);  // reset state
   }
+
   ActionWidgetComponent get_widget(Camera &camera, void *sceneEditor_) {
     SceneEditor *sceneEditor = static_cast<SceneEditor *>(sceneEditor_);
     return [&camera, zclip = zs::vec<float, 2>{camera.getNearClip(), camera.getFarClip()},

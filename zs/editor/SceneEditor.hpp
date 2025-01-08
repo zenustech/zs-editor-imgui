@@ -6,6 +6,7 @@
 #include "editor/ImguiRenderer.hpp"
 #include "editor/widgets/WidgetComponent.hpp"
 #include "imgui.h"
+#include "widgets/SceneWidgetComponent.hpp"
 #include "world/async/Executor.hpp"
 #include "world/async/StateMachine.hpp"
 #include "world/scene/Camera.hpp"
@@ -57,6 +58,8 @@ namespace zs {
 
     Signal<void(const glm::vec3 &)> _positionChanged;
     Signal<void(const glm::vec3 &)> _orientationChanged;
+
+    bool onEvent(GuiEvent *e) { return _cameraState.onEvent(e); }
 
     Camera *_cam;
     StateMachine _cameraState;
@@ -178,7 +181,11 @@ namespace zs {
     int numFrameRenderModels;
     float framePerSecond = 0.0f;
 
+    // [deprecated]
     SceneEditorInputMode inputMode;
+    //
+    // SceneEditorWidgetComponent _widget;
+    CameraControl _camCtrl;
 
     bool showWireframe{true}, showIndex{true}, showCoordinate{true}, enableGuizmo{true},
         ignoreDepthTest{false}, showNormal{true}, showOutline{true}, drawTexture{false};
