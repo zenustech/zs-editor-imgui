@@ -118,6 +118,7 @@ add_executable(zs_editor_imgui
 	zs/editor/SceneEditorAugment.cpp
 	zs/editor/SceneEditorOutline.cpp
 	zs/editor/SceneEditorPicking.cpp
+	zs/editor/SceneEditorLighting.cpp
 	zs/editor/SceneEditorOcclusionQuery.cpp
 
 	zs/editor/widgets/DetailWidgetComponent.cpp

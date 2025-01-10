@@ -122,6 +122,164 @@ void main()
 }
 )";
 
+  static const char g_mesh_pbr_vert_code[] = R"(
+#version 450
+precision highp float;
+
+layout (location = 0) in vec3 inPos;
+layout (location = 1) in vec3 inNormal;
+layout (location = 2) in vec3 inColor;
+// layout (location = 3) in vec2 inUV;
+// layout (location = 3) in uint inVid;
+
+layout (set = 0, binding = 0) uniform SceneCamera {
+	mat4 projection;
+	mat4 view;
+} cameraUbo;
+
+layout (push_constant) uniform Model {
+ 	mat4 model;
+} params;
+
+layout (location = 0) out vec3 outNormal;
+layout (location = 1) out vec3 outColor;
+// layout (location = 2) out vec2 outUV;
+layout (location = 2) out vec4 outViewVec; // view offset and positive view depth
+layout (location = 3) out vec3 outWorldPos;
+
+void main() 
+{
+	outColor = inColor;
+	vec4 worldPos = params.model * vec4(inPos, 1.0);
+	gl_Position = cameraUbo.view * worldPos;
+  outViewVec.w = -gl_Position.z; // get positive view space depth
+  gl_Position = cameraUbo.projection * gl_Position;
+
+	outNormal = normalize((params.model * vec4(inNormal, 0.0f)).xyz);
+	outViewVec.xyz = ((inverse(cameraUbo.view) * vec4(0.0, 0.0, 0.0, 1.0)) - worldPos).xyz;
+  outWorldPos = worldPos.xyz;
+}
+)";
+
+  static const char g_mesh_pbr_frag_code[] = R"(
+#version 450
+precision highp float;
+
+layout (location = 0) in vec3 inNormal;
+layout (location = 1) in vec3 inColor;
+layout (location = 2) in vec4 inViewVec; // view offset and positive view depth
+layout (location = 3) in vec3 inWorldPos;
+
+struct LightInfo{
+  vec4 sphere; // xyz: world space position, w: radius
+  vec4 color; // rgb: color, a: intensity
+};
+
+struct ShadeContext{
+  vec3 lambert;
+  vec3 N;
+  vec3 V;
+  float NV;
+  float a;
+  float a2;
+};
+
+layout (push_constant) uniform fragmentPushConstants {
+    layout(offset = 16 * 4) int objId;
+    layout(offset = 16 * 4 + 8) ivec2 clusterCountVec; // x: cluster count per line, y: per depth
+} pushConstant;
+layout (set = 1, binding = 0) readonly buffer LightList {
+  LightInfo lights[];
+};
+layout (set = 1, binding = 1) readonly buffer ClusterLightIndexInfo {
+  int lightIndices[];
+};
+
+layout (location = 0) out vec4 outFragColor;
+layout (location = 1) out ivec3 outTag;
+
+const float PI = 3.1415926;
+const float invPI = 1.0 / PI;
+
+const float ambient = 0.02;
+const float roughness = 0.9;
+const float metallic = 0.1;
+
+int getClusterIndex(){
+  ivec3 cid_vec = ivec3(gl_FragCoord.xy / 32, floor(inViewVec.w / 625.0));
+  return int(dot(cid_vec, ivec3(1, pushConstant.clusterCountVec.x, pushConstant.clusterCountVec.y)));
+}
+
+float GGX(float cosine, float k){
+  return cosine / (cosine * (1.0 - k) + k);
+}
+
+vec3 CookTorrance(in LightInfo lightInfo, in ShadeContext context){
+  // vector from fragment to light source in world space
+  vec3 L = lightInfo.sphere.xyz - inWorldPos.xyz;
+  float invLightDist2 = 1.0 / dot(L, L);
+  L = normalize(L);
+
+  /* Lambert */
+  // this variable has been calculated in ShadeContext
+  // vec3 lambert = inColor * invPI;
+
+  /* Specular */
+  // normal distribution
+  vec3 HalfVec = normalize(L + context.V);
+  float NH = max(0.0, dot(context.N, HalfVec));
+  float D = context.a2 / (PI * pow(NH * NH * (context.a2 - 1.0) + 1.0, 2.0));
+  // Geometry
+  float k = pow(context.a + 1.0, 2.0) * 0.125;
+  float NL = max(0.0, dot(context.N, L));
+  float G = GGX(NL, k) * GGX(context.NV, k);
+  // fresnel
+  vec3 f0 = mix(vec3(0.05), inColor, metallic);
+  float _temp = 1.0 - context.NV;
+  _temp = _temp * _temp;
+  _temp = _temp * _temp * (1.0 - context.NV); // pow(1.0 - context.NV, 5.0)
+  vec3 F = f0 + (1.0 - f0) * _temp;
+  vec3 specular = F * (D * G / max(0.002, 4.0 * context.NV * NL));
+
+  vec3 Kd = clamp((1.0 - F), 0.0, 1.0) * (1.0 - metallic);
+  vec3 light = (NL * lightInfo.color.a * invLightDist2) * lightInfo.color.rgb;
+
+  return (Kd * context.lambert + specular) * light;
+}
+
+void main() {
+  ShadeContext context;
+  context.lambert = inColor * invPI;
+  context.N = normalize(inNormal);
+  context.V = normalize(inViewVec.xyz);
+  // pre-calculation
+  context.NV = max(0.0, dot(context.N, context.V));
+  context.a = roughness * roughness;
+  context.a2 = context.a * context.a;
+
+  int cid_base = getClusterIndex() << 5;
+  int sizeOfClusterLights = lightIndices[cid_base];
+  outFragColor.rgb = vec3(0.0);
+  for (int i = 1; i <= sizeOfClusterLights; ++i){
+    int lid = lightIndices[cid_base + i];
+    outFragColor.rgb += CookTorrance(lights[lid], context);
+  }
+
+  // fake environment lighting
+  // outFragColor.rgb += context.lambert * ambient;
+  // outFragColor.rgb = vec3(floor(gl_FragCoord.xy / 32) * 0.01, floor(inViewVec.w / 625.0) * 0.03);
+  // outFragColor.rgb = vec3(lightIndices[cid_base + 29], lightIndices[cid_base + 30], lightIndices[cid_base + 31]) * 0.001;
+  // outFragColor.rgb = vec3(sizeOfClusterLights / 20.0, sizeOfClusterLights / 20.0, inViewVec.w * 0.0025);
+
+  // outFragColor.r = sizeOfClusterLights / 20.0;
+  outFragColor.a = 1.0;
+
+  outTag.r = pushConstant.objId;
+  outTag.g = -1;
+  outTag.b = gl_PrimitiveID;
+}
+)";
+
   static const char g_mesh_vert_bindless_code[] = R"(
 #version 450
 
@@ -433,14 +591,20 @@ void main()
       currentVisiblePrimsDrawnTags.resize(currentVisiblePrimsSet.size());
       primIdToVisPrimId.clear();
       currentVisiblePrimsDrawn.clear();
+      sceneLighting.lightList.clear();
       // i32 visCnt = 0;
       for (auto &&prim : currentVisiblePrimsSet) {
         auto p = prim.lock();
-        // map discrete prim ids to continuous
-        primIdToVisPrimId[p->id()] = currentVisiblePrims.size();
-        currentVisiblePrims.push_back(p.get());
-        currentVisiblePrimsDrawn[p.get()] = 0;
-        // if (!p->empty()) visCnt++;
+        if (p->_localPrims.contains(zs::prim_type_e::Light_)) {
+          // emplace light source into light list
+          registerLightSource(p->localLightPrims());
+        } else {
+          // map discrete prim ids to continuous
+          primIdToVisPrimId[p->id()] = currentVisiblePrims.size();
+          currentVisiblePrims.push_back(p.get());
+          currentVisiblePrimsDrawn[p.get()] = 0;
+          // if (!p->empty()) visCnt++;
+        }
       }
 
       // setup flag for sync
@@ -464,9 +628,10 @@ void main()
 
     /// shaders
     sceneRenderer.vertShader = ctx.createShaderModuleFromGlsl(
-        g_mesh_vert_code, vk::ShaderStageFlagBits::eVertex, "default_mesh_vert");
+      g_mesh_pbr_vert_code/*g_mesh_vert_code*/, vk::ShaderStageFlagBits::eVertex, "default_mesh_vert");
     sceneRenderer.fragShader = ctx.createShaderModuleFromGlsl(
-        g_mesh_frag_code, vk::ShaderStageFlagBits::eFragment, "default_mesh_frag");
+      g_mesh_pbr_frag_code/*g_mesh_frag_code*/, vk::ShaderStageFlagBits::eFragment, "default_mesh_frag");
+    ctx.acquireSet(sceneRenderer.fragShader.get().layout(1), sceneLighting.lightTableSet);
 
     // texture
     ResourceSystem::load_shader(ctx, "default_texture_preview.vert",
@@ -502,11 +667,12 @@ void main()
 #endif
 
 #if ZS_ENABLE_USD
-    // loadSampleScene();
+    loadSampleScene();
     // loadUVTestScene();
 #endif
 
     ///
+    setupLightingResources();
     setupOITResources();
     setupPickResources();
     setupAugmentResources();
@@ -575,10 +741,11 @@ void main()
         .setBlendEnable(false)
         .setDepthCompareOp(SceneEditor::reversedZ ? vk::CompareOp::eGreaterOrEqual
                                                   : vk::CompareOp::eLessOrEqual)
-        .setPushConstantRanges(
-            {vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4)},
-             vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, sizeof(glm::mat4),
-                                   sizeof(i32)}})
+        .setPushConstantRanges({
+          vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4)},
+          vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, sizeof(glm::mat4), sizeof(i32)},
+          vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, sizeof(glm::mat4) + 2 * sizeof(i32), sizeof(glm::ivec2)}
+        })
         .setBindingDescriptions(VkModel::get_binding_descriptions_normal_color(VkModel::tri))
         .setAttributeDescriptions(VkModel::get_attribute_descriptions_normal_color(VkModel::tri));
     sceneRenderer.opaquePipeline = pipelineBuilder.build();
@@ -779,8 +946,13 @@ void main()
     zs::SceneConfig conf;
     // "/home/mine/Codes/zpc_poc/assets/HumanFemale/HumanFemale.walk.usd"
     // "E:/Kitchen_set/Kitchen_set.usd"
-    conf.setString("srcPath", "E:/home_usd/result/start.usd");
-    // conf.setString("srcPath", "E:/Kitchen_set/Kitchen_set.usd");
+    // conf.setString("srcPath", "E:/home_usd/result/start.usd");
+    conf.setString("srcPath", "E:/Kitchen_set/Kitchen_set.usd");
+
+    auto& cam = sceneRenderData.camera.get();
+    cam.position = glm::vec3(-154.649, -138.206, -291.733);
+    cam.rotation = glm::vec3(-39.5, -1.4, 0.0);
+    cam.updateViewMatrix();
 
     auto scene = plugin->createScene("test");
     scene->openScene(conf);
@@ -891,6 +1063,7 @@ void main()
 
   void SceneEditor::rebuildAttachments() {
     rebuildSceneFbos();
+    rebuildLightingFBO();
     rebuildOITFBO();
 
     rebuildPickFbos();
@@ -1019,6 +1192,14 @@ void main()
     prepareRender();
 #if ENABLE_PROFILE
     timer.tock("SceneEditor:: prepare render");
+#endif
+
+#if ENABLE_PROFILE
+    timer.tick();
+#endif
+    updateClusterLighting();
+#if ENABLE_PROFILE
+    timer.tock("SceneEditor:: update cluster lighting");
 #endif
 
 #if ENABLE_PROFILE
@@ -1481,7 +1662,7 @@ void main()
           (*cmd).bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                     /*pipeline layout*/ sceneRenderer.opaquePipeline.get(),
                                     /*firstSet*/ 0,
-                                    /*descriptor sets*/ {sceneRenderData.sceneCameraSet},
+                                    /*descriptor sets*/ {sceneRenderData.sceneCameraSet, sceneLighting.lightTableSet},
                                     /*dynamic offset*/ {0}, ctx.dispatcher);
 #  endif
 
@@ -1500,6 +1681,11 @@ void main()
           (*cmd).pushConstants(sceneRenderer.opaquePipeline.get(),
                                vk::ShaderStageFlagBits::eFragment, sizeof(transform), sizeof(id),
                                &id);
+          const glm::ivec2 clusterCountVec = { sceneLighting.clusterCountPerLine, sceneLighting.clusterCountPerDepth };
+          (*cmd).pushConstants(
+            sceneRenderer.opaquePipeline.get(), vk::ShaderStageFlagBits::eFragment,
+            sizeof(transform) + 2 * sizeof(id), sizeof(glm::ivec2), &clusterCountVec
+          );
           model.bindNormalColor((*cmd), VkModel::tri);
           model.drawNormalColor((*cmd), VkModel::tri);
         } else {

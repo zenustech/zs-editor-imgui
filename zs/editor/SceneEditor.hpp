@@ -497,6 +497,30 @@ namespace zs {
       Owner<Framebuffer> postFBO;
     } sceneOITRenderer;
 
+    struct SceneLightInfo {
+      glm::vec4 sphere; // xyz: world space position, w: radius
+      glm::vec4 color; // rgb: color, a: intensity
+    };
+
+    struct SceneLighting {
+      Owner<Pipeline> clusterLightPipeline;
+      vk::DescriptorSet clusterLightingSet;
+      vk::DescriptorSet lightTableSet;
+
+      Owner<zs::Buffer> screenInfoBuffer;
+      Owner<zs::Buffer> lightInfoBuffer;
+      Owner<zs::Buffer> clusterLightInfoBuffer;
+
+      std::vector<SceneLightInfo> lightList;
+      size_t clusterCountPerLine;
+      size_t clusterCountPerDepth;
+      size_t clusterCount;
+
+      static const size_t CLUSTER_SCREEN_SIZE = 32;
+      static const size_t CLUSTER_Z_SLICE = 32;
+      static const size_t CLUSTER_LIGHT_INDEX_CAPACITY = 32;
+    } sceneLighting;
+
     struct SceneOcclusionQuery {
       Owner<QueryPool> queryPool;
       Owner<zs::Buffer> queryBuffer;
@@ -638,6 +662,13 @@ namespace zs {
     void setupOITResources();
     void rebuildOITFBO();
     void renderTransparent();
+
+    // cluster based lighting
+    void setupLightingResources();
+    void rebuildLightingFBO();
+    void ensureLightListBuffer();
+    void registerLightSource(Shared<LightPrimContainer> lightContainer);
+    void updateClusterLighting();
   };
 
   std::string_view SceneEditor::getFocusPrimLabel() const {
