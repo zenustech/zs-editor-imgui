@@ -7,7 +7,11 @@ namespace zs {
   struct SceneEditor;
 
   struct SceneEditorWidgetComponent : WidgetConcept {
+    SceneEditorWidgetComponent(SceneEditor* s) noexcept : sceneEditor{s} {}
+    ~SceneEditorWidgetComponent() override = default;
+
     void paint() override;
+    void drawPath();
 
     bool onEvent(GuiEvent* e) override;
 

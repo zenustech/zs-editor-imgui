@@ -87,7 +87,7 @@ namespace zs {
     void frameStat();
 
     void drawPath();
-    ActionWidgetComponent getWidget();
+    Shared<SceneEditorWidgetComponent> getWidget();
     ActionWidgetComponent getCameraWidget() {
       if (sceneRenderData.camera.isValid())
         return get_widget(sceneRenderData.camera.get(), this);
@@ -209,6 +209,8 @@ namespace zs {
     struct {
       Signal<void(std::string_view fileLabel, std::string_view nodePath)> _transform;
     } _signals;
+
+    Shared<SceneEditorWidgetComponent> _widget;
 
     ///
     /// vulkan
