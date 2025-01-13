@@ -696,30 +696,45 @@ void main()
     renderer.registerImage(renderedSceneColorSet);
 
     // renderpass
-    assert(sampleBits != vk::SampleCountFlagBits::e1 && "only support multi-sampling ftm");
+    // assert(sampleBits != vk::SampleCountFlagBits::e1 && "only support multi-sampling ftm");
     auto rpBuilder = ctx.renderpass().setNumPasses(1);
-    rpBuilder
+    if (sampleBits != vk::SampleCountFlagBits::e1) {
+      rpBuilder
         // 0
         .addAttachment(colorFormat, vk::ImageLayout::eUndefined,
-                       vk::ImageLayout::eColorAttachmentOptimal, true, sampleBits)
+        vk::ImageLayout::eColorAttachmentOptimal, true, sampleBits)
         // 1
         .addAttachment(depthFormat, vk::ImageLayout::eUndefined,
-                       vk::ImageLayout::eDepthStencilAttachmentOptimal, true, sampleBits)
+        vk::ImageLayout::eDepthStencilAttachmentOptimal, true, sampleBits)
         // 2
         .addAttachment(colorFormat, vk::ImageLayout::eUndefined,
-                       vk::ImageLayout::eShaderReadOnlyOptimal, false, vk::SampleCountFlagBits::e1)
+        vk::ImageLayout::eShaderReadOnlyOptimal, false, vk::SampleCountFlagBits::e1)
         // 3
         .addAttachment(depthFormat, vk::ImageLayout::eUndefined,
-                       vk::ImageLayout::eShaderReadOnlyOptimal,  // used as input attachment
-                       false, vk::SampleCountFlagBits::e1)
+        vk::ImageLayout::eShaderReadOnlyOptimal,  // used as input attachment
+        false, vk::SampleCountFlagBits::e1)
         // 4
         .addAttachment(pickFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, true,
-                       sampleBits)
+        sampleBits)
         // 5
         .addAttachment(pickFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, false,
-                       vk::SampleCountFlagBits::e1)
-        .addSubpass({0, 4}, /*depthStencilRef*/ 1, /*colorResolveRef*/ {2, 5},
-                    /*depthStencilResolveRef*/ 3, /*inputAttachments*/ {});
+        vk::SampleCountFlagBits::e1)
+        .addSubpass({ 0, 4 }, /*depthStencilRef*/ 1, /*colorResolveRef*/{ 2, 5 },
+        /*depthStencilResolveRef*/ 3, /*inputAttachments*/{});
+    } else {
+      rpBuilder
+        // color
+        .addAttachment(colorFormat, vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eShaderReadOnlyOptimal, true, vk::SampleCountFlagBits::e1)
+        // depth
+        .addAttachment(depthFormat, vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eShaderReadOnlyOptimal, true, vk::SampleCountFlagBits::e1)
+        // pick
+        .addAttachment(pickFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, true,
+        vk::SampleCountFlagBits::e1)
+        .addSubpass({ 0, 2 }, /*depthStencilRef*/ 1, /*colorResolveRef*/{},
+        /*depthStencilResolveRef*/ -1, /*inputAttachments*/{});
+    }
     sceneRenderer.renderPass = rpBuilder.build();
 
     // opaque pipeline
