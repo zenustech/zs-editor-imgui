@@ -143,7 +143,7 @@ namespace zs {
     };
 
     inline static auto sampleBits = vk::SampleCountFlagBits::e4;
-    inline static auto colorFormat = vk::Format::eR8G8B8A8Unorm;
+    inline static auto colorFormat = vk::Format::eB8G8R8A8Srgb; // vk::Format::eR8G8B8A8Unorm;
     inline static auto depthFormat = vk::Format::eD32Sfloat;
     // inline static auto depthFormat = vk::Format::eD16Unorm;
     inline static auto pickFormat = vk::Format::eR32G32B32A32Sint;
