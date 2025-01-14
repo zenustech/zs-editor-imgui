@@ -226,7 +226,7 @@ namespace zs {
       ImGui::Separator();
       auto dir = camera.getCameraRayDirection(
           sceneEditor->viewportMousePos[0], sceneEditor->viewportMousePos[1],
-          (float)sceneEditor->viewportPanelSize.width, (float)sceneEditor->viewportPanelSize.height);
+          (float)sceneEditor->vkCanvasExtent.width, (float)sceneEditor->vkCanvasExtent.height);
       auto dirText
           = fmt::format("mouse-pointing camera ray: \n{}, {}, {}\n", dir[0], dir[1], dir[2]);
       auto wrapWidth = ImGui::GetContentRegionAvail().x;
@@ -238,8 +238,8 @@ namespace zs {
                   sceneEditor->hoveredHitPt[1], sceneEditor->hoveredHitPt[2]);
       if (sceneEditor->hoveredHitPt[0] != detail::deduce_numeric_infinity<f32>()) {
         auto xy = camera.getScreenPoint(sceneEditor->hoveredHitPt,
-                                        (float)sceneEditor->viewportPanelSize.width,
-                                        (float)sceneEditor->viewportPanelSize.height);
+                                        (float)sceneEditor->vkCanvasExtent.width,
+                                        (float)sceneEditor->vkCanvasExtent.height);
         ImGui::Text("(validation) hit screen point: %.3f, %.3f", xy.x, xy.y);
       }
       ImGui::PopTextWrapPos();

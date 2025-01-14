@@ -206,7 +206,7 @@ namespace zs {
     auto &sceneClicked = sceneEditor->sceneClicked;
 
     // render data
-    auto &viewportPanelSize = sceneEditor->viewportPanelSize;
+    auto &vkCanvasExtent = sceneEditor->vkCanvasExtent;
     auto &focusPrimPtr = sceneEditor->focusPrimPtr;
     auto &sceneRenderData = sceneEditor->sceneRenderData;
     auto &sceneAttachments = sceneEditor->sceneAttachments;
@@ -291,8 +291,8 @@ namespace zs {
     auto mousePos_ = ImGui::GetMousePos();
     viewportMousePos = zs::vec<float, 2>{mousePos_.x - viewportMinScreenPos.x,
                                          mousePos_.y - viewportMinScreenPos.y};
-    viewportMousePos[0] = std::clamp(viewportMousePos[0], 0.f, (float)viewportPanelSize.width);
-    viewportMousePos[1] = std::clamp(viewportMousePos[1], 0.f, (float)viewportPanelSize.height);
+    viewportMousePos[0] = std::clamp(viewportMousePos[0], 0.f, (float)vkCanvasExtent.width);
+    viewportMousePos[1] = std::clamp(viewportMousePos[1], 0.f, (float)vkCanvasExtent.height);
 
     bool imageHovered = ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNone);
     sceneClicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);

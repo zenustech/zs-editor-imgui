@@ -568,8 +568,8 @@ void main()
     guizmoUseSnap = true;
     viewportFocused = viewportHovered = false;
     viewportMousePos = zs::vec<float, 2>::zeros();
-    viewportPanelSize.width = 1280;
-    viewportPanelSize.height = 720;
+    vkCanvasExtent.width = 1280;
+    vkCanvasExtent.height = 720;
     focusPrimPtr = {}, hoveredPrimPtr = {};
     // setup interaction
     onVisiblePrimsChanged.connect([this](const std::vector<Weak<ZsPrimitive>> &prims) {
@@ -885,7 +885,7 @@ void main()
     camera.setReversedZ(SceneEditor::reversedZ);
     camera.setPosition(glm::vec3(0.0f, 0.0f, -3.4f));
     camera.setRotation(glm::vec3(0.0f, 0.0f, 0.0f));
-    camera.setPerspective(45.0f, (float)viewportPanelSize.width / (float)viewportPanelSize.height, 0.01f,
+    camera.setPerspective(45.0f, (float)vkCanvasExtent.width / (float)vkCanvasExtent.height, 0.01f,
                           20000.0f);
     camera.updateViewMatrix();
 
@@ -1101,14 +1101,14 @@ void main()
   void SceneEditor::rebuildSceneFbos() {
     // 2
     sceneAttachments.color
-        = ctx().create2DImage(viewportPanelSize, colorFormat,
+        = ctx().create2DImage(vkCanvasExtent, colorFormat,
                               /* combined image sampler */ vk::ImageUsageFlagBits::eSampled |
                                   /* storage image */ vk::ImageUsageFlagBits::eStorage
                                   | vk::ImageUsageFlagBits::eColorAttachment |
                                   /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
     // 3
     sceneAttachments.depth
-        = ctx().create2DImage(viewportPanelSize, depthFormat,
+        = ctx().create2DImage(vkCanvasExtent, depthFormat,
                               vk::ImageUsageFlagBits::eSampled |
                                   // vk::ImageUsageFlagBits::eTransientAttachment |
                                   vk::ImageUsageFlagBits::eDepthStencilAttachment
@@ -1121,7 +1121,7 @@ void main()
                               vk::MemoryPropertyFlagBits::eDeviceLocal, false, true, false);
     // 5
     scenePickPass.pickBuffer
-        = ctx().create2DImage(viewportPanelSize, pickFormat,
+        = ctx().create2DImage(vkCanvasExtent, pickFormat,
                               /* combined image sampler */ vk::ImageUsageFlagBits::eSampled |
                                   /* storage image */ vk::ImageUsageFlagBits::eStorage
                                   | vk::ImageUsageFlagBits::eColorAttachment |
@@ -1131,20 +1131,20 @@ void main()
     if (sampleBits != vk::SampleCountFlagBits::e1) {
       // 0
       sceneAttachments.msaaColor = ctx().create2DImage(
-          viewportPanelSize, colorFormat,
+          vkCanvasExtent, colorFormat,
           vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment,
           vk::MemoryPropertyFlagBits::eDeviceLocal,
           /*mipmap*/ false, true, /*transfer*/ false, sampleBits);
       // 1
       sceneAttachments.msaaDepth
-          = ctx().create2DImage(viewportPanelSize, depthFormat,
+          = ctx().create2DImage(vkCanvasExtent, depthFormat,
                                 vk::ImageUsageFlagBits::eTransientAttachment
                                     | vk::ImageUsageFlagBits::eDepthStencilAttachment,
                                 vk::MemoryPropertyFlagBits::eDeviceLocal, /*mipmap*/ false, true,
                                 /*transfer, for extra depth resolve*/ false, sampleBits);
       // 4
       sceneAttachments.msaaPick = ctx().create2DImage(
-          viewportPanelSize, pickFormat,
+          vkCanvasExtent, pickFormat,
           vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment,
           vk::MemoryPropertyFlagBits::eDeviceLocal,
           /*mipmap*/ false, true,
@@ -1155,12 +1155,12 @@ void main()
            (vk::ImageView)sceneAttachments.color.get(), (vk::ImageView)sceneAttachments.depth.get(),
            (vk::ImageView)sceneAttachments.msaaPick.get(),
            (vk::ImageView)scenePickPass.pickBuffer.get()},
-          viewportPanelSize, sceneRenderer.renderPass.get());
+          vkCanvasExtent, sceneRenderer.renderPass.get());
     } else {
       sceneAttachments.fbo = ctx().createFramebuffer(
           {(vk::ImageView)sceneAttachments.color.get(), (vk::ImageView)sceneAttachments.depth.get(),
            (vk::ImageView)scenePickPass.pickBuffer.get()},
-          viewportPanelSize, sceneRenderer.renderPass.get());
+          vkCanvasExtent, sceneRenderer.renderPass.get());
     }
   }
 
@@ -1367,7 +1367,7 @@ void main()
     auto &cmd = this->cmd.get();
     cmd.begin();
 
-    vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), viewportPanelSize);
+    vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), vkCanvasExtent);
     std::array<vk::ClearValue, 6> clearValues{};
     clearValues[0].color = vk::ClearColorValue{std::array<float, 4>{0.51f, 0.51f, 0.51f, 0.0f}};
     clearValues[1].depthStencil
@@ -1388,9 +1388,9 @@ void main()
     auto viewport
         = vk::Viewport()
               .setX(0 /*offsetx*/)
-              .setY(viewportPanelSize.height /*-offsety*/)
-              .setWidth(float(viewportPanelSize.width))
-              .setHeight(-float(viewportPanelSize.height))  // negative viewport, opengl conformant
+              .setY(vkCanvasExtent.height /*-offsety*/)
+              .setWidth(float(vkCanvasExtent.width))
+              .setHeight(-float(vkCanvasExtent.height))  // negative viewport, opengl conformant
               .setMinDepth(0.0f)
               .setMaxDepth(1.0f);
 
@@ -1422,7 +1422,7 @@ void main()
                     ctx.dispatcher);
 
             (*renderCmd).setViewport(0, {viewport});
-            (*renderCmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), viewportPanelSize)});
+            (*renderCmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});
 
             for (const auto &primPtr : *it) {
               // auto prim = primPtr.lock();
@@ -1552,7 +1552,7 @@ void main()
                     ctx.dispatcher);
 
             (*renderCmd).setViewport(0, {viewport});
-            (*renderCmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), viewportPanelSize)});
+            (*renderCmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});
 
             (*renderCmd)
                 .bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
@@ -1587,7 +1587,7 @@ void main()
     (*cmd).beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
 
     (*cmd).setViewport(0, {viewport});
-    (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), viewportPanelSize)});
+    (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});
 
     /*
      * Opaque Pass
@@ -1883,20 +1883,20 @@ void main()
     {
       vk::Extent2D currentDim{(u32)imguiCanvasSize.x, (u32)imguiCanvasSize.y};
       if (currentDim.width != 0 && currentDim.height != 0
-          && (currentDim.width != viewportPanelSize.width
-              || currentDim.height != viewportPanelSize.height)) {
+          && (currentDim.width != vkCanvasExtent.width
+              || currentDim.height != vkCanvasExtent.height)) {
         ctx().sync();
 
-        fmt::print("viewport resizing from <{}, {}> to <{}, {}>\n", viewportPanelSize.width,
-                   viewportPanelSize.height, currentDim.width, currentDim.height);
+        fmt::print("viewport resizing from <{}, {}> to <{}, {}>\n", vkCanvasExtent.width,
+                   vkCanvasExtent.height, currentDim.width, currentDim.height);
 
-        viewportPanelSize = currentDim;
+        vkCanvasExtent = currentDim;
 
         rebuildAttachments();
 
         sceneRenderData.camera.get().setPerspective(
             sceneRenderData.camera.get().getFov(),
-            (float)viewportPanelSize.width / (float)viewportPanelSize.height,
+            (float)vkCanvasExtent.width / (float)vkCanvasExtent.height,
             sceneRenderData.camera.get().getNearClip(), sceneRenderData.camera.get().getFarClip());
       }
     }
@@ -1934,8 +1934,8 @@ void main()
 
   glm::vec3 SceneEditor::getScreenPointCameraRayDirection() const {
     return sceneRenderData.camera.get().getCameraRayDirection(
-        viewportMousePos[0], viewportMousePos[1], (float)viewportPanelSize.width,
-        (float)viewportPanelSize.height);
+        viewportMousePos[0], viewportMousePos[1], (float)vkCanvasExtent.width,
+        (float)vkCanvasExtent.height);
   }
 
   glm::mat4 get_transform(const vec<float, 3> &translation, const vec<float, 3> &eulerXYZ,

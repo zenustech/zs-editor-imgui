@@ -142,7 +142,7 @@ void main() {
   void SceneEditor::rebuildOcclusionQueryFbo() {
     sceneOcclusionQuery.occlusionFBO = ctx().createFramebuffer(
       { (vk::ImageView)sceneAttachments.depth.get(), (vk::ImageView)sceneAttachments.color.get() },
-      viewportPanelSize,
+      vkCanvasExtent,
       sceneOcclusionQuery.renderPass.get()
     );
   }
@@ -188,7 +188,7 @@ void main() {
     size_t currentQueryCount = visiblePrims.size();
     ensureOcclusionQueryBuffer(cmd, currentQueryCount * sizeof(int));
 
-    vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), viewportPanelSize);
+    vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), vkCanvasExtent);
     auto renderPassInfo = vk::RenderPassBeginInfo()
       .setRenderPass(sceneOcclusionQuery.renderPass.get())
       .setFramebuffer(sceneOcclusionQuery.occlusionFBO.get())
@@ -201,9 +201,9 @@ void main() {
     auto viewport
       = vk::Viewport()
       .setX(0 /*offsetx*/)
-      .setY(viewportPanelSize.height /*-offsety*/)
-      .setWidth(float(viewportPanelSize.width))
-      .setHeight(-float(viewportPanelSize.height))  // negative viewport, opengl conformant
+      .setY(vkCanvasExtent.height /*-offsety*/)
+      .setWidth(float(vkCanvasExtent.width))
+      .setHeight(-float(vkCanvasExtent.height))  // negative viewport, opengl conformant
       .setMinDepth(0.0f)
       .setMaxDepth(1.0f);
 
@@ -221,7 +221,7 @@ void main() {
           ctx.dispatcher);
 
         (*renderCmd).setViewport(0, { viewport });
-        (*renderCmd).setScissor(0, { vk::Rect2D(vk::Offset2D(), viewportPanelSize) });
+        (*renderCmd).setScissor(0, { vk::Rect2D(vk::Offset2D(), vkCanvasExtent) });
         (*renderCmd).bindDescriptorSets(
           vk::PipelineBindPoint::eGraphics,
           /*pipeline layout*/ sceneOcclusionQuery.renderPipeline.get(),

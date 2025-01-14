@@ -203,17 +203,17 @@ void main()
     // scenePickPass.pickBufferHost.get().map();
 
     scenePickPass.postFxVis
-        = ctx().create2DImage(viewportPanelSize, colorFormat,
+        = ctx().create2DImage(vkCanvasExtent, colorFormat,
                               /* combined image sampler */ vk::ImageUsageFlagBits::eSampled |
                                   /* storage image */ vk::ImageUsageFlagBits::eStorage
                                   | vk::ImageUsageFlagBits::eColorAttachment);
     scenePickPass.fbo = ctx().createFramebuffer(
         {(vk::ImageView)scenePickPass.pickBuffer.get(),
          (vk::ImageView)scenePickPass.postFxVis.get(), (vk::ImageView)sceneAttachments.depth.get()},
-        viewportPanelSize, scenePickPass.renderPass.get());
+        vkCanvasExtent, scenePickPass.renderPass.get());
 
     // for visualization
-    fmt::print("viewport panel size: {}, {}\n", viewportPanelSize.width, viewportPanelSize.height);
+    fmt::print("viewport panel size: {}, {}\n", vkCanvasExtent.width, vkCanvasExtent.height);
     vk::DescriptorImageInfo imageInfo{};
     imageInfo.sampler = sampler.get();
     imageInfo.imageView = scenePickPass.postFxVis.get();
@@ -269,7 +269,7 @@ void main()
                              vk::PipelineStageFlagBits::eLateFragmentTests, vk::DependencyFlags(),
                              {}, {}, {depthBarrier}, ctx.dispatcher);
 
-      vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), viewportPanelSize);
+      vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), vkCanvasExtent);
       std::array<vk::ClearValue, 1> clearValues{};
       clearValues[0].color = vk::ClearColorValue{std::array<int, 4>{-1, -1, -1, -1}};
       auto renderPassInfo = vk::RenderPassBeginInfo()
@@ -290,10 +290,10 @@ void main()
 
       auto viewport = vk::Viewport()
                           .setX(0 /*offsetx*/)
-                          .setY(viewportPanelSize.height /*-offsety*/)
-                          .setWidth(float(viewportPanelSize.width))
+                          .setY(vkCanvasExtent.height /*-offsety*/)
+                          .setWidth(float(vkCanvasExtent.width))
                           .setHeight(-float(
-                              viewportPanelSize.height))  // negative viewport, opengl conformant
+                              vkCanvasExtent.height))  // negative viewport, opengl conformant
                           .setMinDepth(0.0f)
                           .setMaxDepth(1.0f);
 
@@ -309,7 +309,7 @@ void main()
 
               (*renderCmd).setViewport(0, {viewport});
 
-              (*renderCmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), viewportPanelSize)});
+              (*renderCmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});
               (*renderCmd)
                   .bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                       /*pipeline layout*/ scenePickPass.pipeline.get(),
@@ -358,7 +358,7 @@ void main()
       (*cmd).nextSubpass(vk::SubpassContents::eInline);
 
       (*cmd).setViewport(0, {viewport});
-      (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), viewportPanelSize)});
+      (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});
       (*cmd).bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                 /*pipeline layout*/ scenePickPass.pipeline.get(),
                                 /*firstSet*/ 0,

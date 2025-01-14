@@ -223,7 +223,7 @@ namespace zs {
 
     ImguiVkRenderer *guiRenderer{nullptr};
 
-    vk::Extent2D viewportPanelSize;
+    vk::Extent2D vkCanvasExtent;
 
     /// @note profiling
     enum vk_query_type_e : u32 {

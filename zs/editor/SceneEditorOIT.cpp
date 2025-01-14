@@ -265,12 +265,12 @@ void main() {
 
   void SceneEditor::rebuildOITFBO() {
     sceneOITRenderer.accumImage0 = ctx().create2DImage(
-        viewportPanelSize, vk::Format::eR32G32B32A32Sfloat,
+        vkCanvasExtent, vk::Format::eR32G32B32A32Sfloat,
         /* combined image sampler */ vk::ImageUsageFlagBits::eSampled
             | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eColorAttachment |
             /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
     sceneOITRenderer.accumImage1 = ctx().create2DImage(
-        viewportPanelSize, colorFormat,
+        vkCanvasExtent, colorFormat,
         /* combined image sampler */ vk::ImageUsageFlagBits::eSampled
             | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eColorAttachment |
             /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
@@ -281,9 +281,9 @@ void main() {
             (vk::ImageView)sceneOITRenderer.accumImage0.get(),
             (vk::ImageView)sceneOITRenderer.accumImage1.get(),
         },
-        viewportPanelSize, sceneOITRenderer.accumRenderPass.get());
+        vkCanvasExtent, sceneOITRenderer.accumRenderPass.get());
     sceneOITRenderer.postFBO
-        = ctx().createFramebuffer({(vk::ImageView)sceneAttachments.color.get()}, viewportPanelSize,
+        = ctx().createFramebuffer({(vk::ImageView)sceneAttachments.color.get()}, vkCanvasExtent,
                                   sceneOITRenderer.postRenderPass.get());
 
     vk::DescriptorImageInfo imageInfo{};
@@ -317,7 +317,7 @@ void main() {
 #endif
     // render accumulation
     {
-      vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), viewportPanelSize);
+      vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), vkCanvasExtent);
       std::array<vk::ClearValue, 3> clearValues{};
       clearValues[1].color = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 1.0f}};
       clearValues[2].color = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f}};
@@ -331,14 +331,14 @@ void main() {
 
       auto viewport = vk::Viewport()
                           .setX(0 /*offsetx*/)
-                          .setY(viewportPanelSize.height /*-offsety*/)
-                          .setWidth(float(viewportPanelSize.width))
+                          .setY(vkCanvasExtent.height /*-offsety*/)
+                          .setWidth(float(vkCanvasExtent.width))
                           .setHeight(-float(
-                              viewportPanelSize.height))  // negative viewport, opengl conformant
+                              vkCanvasExtent.height))  // negative viewport, opengl conformant
                           .setMinDepth(0.0f)
                           .setMaxDepth(1.0f);
       (*cmd).setViewport(0, {viewport});
-      (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), viewportPanelSize)});
+      (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});
 
       for (const auto& primPtr : getCurrentVisiblePrims()) {
         // auto prim = primPtr.lock();
@@ -391,7 +391,7 @@ void main() {
 
     // post blending
     {
-      vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), viewportPanelSize);
+      vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), vkCanvasExtent);
       auto renderPassInfo = vk::RenderPassBeginInfo()
                                 .setRenderPass(sceneOITRenderer.postRenderPass.get())
                                 .setFramebuffer(sceneOITRenderer.postFBO.get())

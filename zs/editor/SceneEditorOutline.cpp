@@ -246,13 +246,13 @@ void main()
 
   void SceneEditor::rebuildOutlineFbo() {
     sceneOutlineRenderer.outlineImage
-        = ctx().create2DImage(viewportPanelSize, colorFormat,
+        = ctx().create2DImage(vkCanvasExtent, colorFormat,
                               /* combined image sampler */ vk::ImageUsageFlagBits::eSampled |
                                   /* storage image */ vk::ImageUsageFlagBits::eStorage
                                   | vk::ImageUsageFlagBits::eColorAttachment |
                                   /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
     sceneOutlineRenderer.outlineSwapImage
-        = ctx().create2DImage(viewportPanelSize, colorFormat,
+        = ctx().create2DImage(vkCanvasExtent, colorFormat,
                               /* combined image sampler */ vk::ImageUsageFlagBits::eSampled |
                                   /* storage image */ vk::ImageUsageFlagBits::eStorage
                                   | vk::ImageUsageFlagBits::eColorAttachment |
@@ -260,12 +260,12 @@ void main()
 
     sceneOutlineRenderer.baseFBO
         = ctx().createFramebuffer({(vk::ImageView)sceneOutlineRenderer.outlineImage.get()},
-                                  viewportPanelSize, sceneOutlineRenderer.baseRenderPass.get());
+                                  vkCanvasExtent, sceneOutlineRenderer.baseRenderPass.get());
     sceneOutlineRenderer.FBO
         = ctx().createFramebuffer({(vk::ImageView)sceneOutlineRenderer.outlineSwapImage.get()},
-                                  viewportPanelSize, sceneOutlineRenderer.renderPass.get());
+                                  vkCanvasExtent, sceneOutlineRenderer.renderPass.get());
     sceneOutlineRenderer.swapFBO
-        = ctx().createFramebuffer({(vk::ImageView)sceneAttachments.color.get()}, viewportPanelSize,
+        = ctx().createFramebuffer({(vk::ImageView)sceneAttachments.color.get()}, vkCanvasExtent,
                                   sceneOutlineRenderer.swapRenderPass.get());
 
     vk::DescriptorImageInfo imageInfo{};
@@ -285,7 +285,7 @@ void main()
   void SceneEditor::_renderOutlineForOneModel(VulkanContext& ctx, VkCommand& cmd,
                                               const VkModel& model, const glm::mat4& transform,
                                               const float* outlineColor) {
-    vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), viewportPanelSize);
+    vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), vkCanvasExtent);
     std::array<vk::ClearValue, 1> clearValues{};
     clearValues[0].color = vk::ClearColorValue{std::array<float, 4>{0.0f, 0.0f, 0.0f, 0.0f}};
     /*
@@ -304,14 +304,14 @@ void main()
       {
         auto viewport = vk::Viewport()
                             .setX(0 /*offsetx*/)
-                            .setY(viewportPanelSize.height /*-offsety*/)
-                            .setWidth(float(viewportPanelSize.width))
+                            .setY(vkCanvasExtent.height /*-offsety*/)
+                            .setWidth(float(vkCanvasExtent.width))
                             .setHeight(-float(
-                                viewportPanelSize.height))  // negative viewport, opengl conformant
+                                vkCanvasExtent.height))  // negative viewport, opengl conformant
                             .setMinDepth(0.0f)
                             .setMaxDepth(1.0f);
         (*cmd).setViewport(0, {viewport});
-        (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), viewportPanelSize)});
+        (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});
       }
 
       // render outline for chosen model
@@ -355,7 +355,7 @@ void main()
       (*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics,
                           sceneOutlineRenderer.outlinePipeline.get());
       glm::vec2 deltaUV
-          = glm::vec2(1.0f / viewportPanelSize.width, 1.0f / viewportPanelSize.height);
+          = glm::vec2(1.0f / vkCanvasExtent.width, 1.0f / vkCanvasExtent.height);
       (*cmd).pushConstants(sceneOutlineRenderer.outlinePipeline.get(),
                            vk::ShaderStageFlagBits::eFragment, 0, sizeof(deltaUV), &deltaUV);
       (*cmd).pushConstants(sceneOutlineRenderer.outlinePipeline.get(),
@@ -386,7 +386,7 @@ void main()
       (*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics,
                           sceneOutlineRenderer.outlineSwapPipeline.get());
       glm::vec2 deltaUV
-          = glm::vec2(1.0f / viewportPanelSize.width, 1.0f / viewportPanelSize.height);
+          = glm::vec2(1.0f / vkCanvasExtent.width, 1.0f / vkCanvasExtent.height);
       (*cmd).pushConstants(sceneOutlineRenderer.outlineSwapPipeline.get(),
                            vk::ShaderStageFlagBits::eFragment, 0, sizeof(deltaUV), &deltaUV);
       (*cmd).pushConstants(sceneOutlineRenderer.outlineSwapPipeline.get(),

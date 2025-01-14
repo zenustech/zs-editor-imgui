@@ -535,7 +535,7 @@ void main() {
   void SceneEditor::rebuildAugmentFbo() {
     sceneAugmentRenderer.fbo = ctx().createFramebuffer(
         {(vk::ImageView)sceneAttachments.color.get(), (vk::ImageView)sceneAttachments.depth.get()},
-        viewportPanelSize, sceneAugmentRenderer.renderPass.get());
+        vkCanvasExtent, sceneAugmentRenderer.renderPass.get());
 
     /// overlay text generation
     {
@@ -637,7 +637,7 @@ void main() {
 
           genTextParams.limit = TEXTOVERLAY_MAX_CHAR_COUNT;
           genTextParams.extent
-              = glm::ivec2{(int)viewportPanelSize.width, (int)viewportPanelSize.height};
+              = glm::ivec2{(int)vkCanvasExtent.width, (int)vkCanvasExtent.height};
           genTextParams.ids
               // = glm::ivec2{focusObjId, sceneRenderData.models[focusObjId].verts.vertexCount};
               = glm::ivec2{focusPrim->id(), /*focusPrim->vkTriMesh(ctx)*/ model.verts.vertexCount};
@@ -875,7 +875,7 @@ void main() {
 #endif
     cmd.begin();
 
-    vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), viewportPanelSize);
+    vk::Rect2D rect = vk::Rect2D(vk::Offset2D(), vkCanvasExtent);
     std::array<vk::ClearValue, 2> clearValues{};
     // clearValues[0].color = vk::ClearColorValue{0.1f, 0.7f, 0.2f, 0.f};
     // clearValues[1].depthStencil = vk::ClearDepthStencilValue{1.0f, 0};
@@ -921,16 +921,16 @@ void main() {
                 auto viewport
                     = vk::Viewport()
                           .setX(0 /*offsetx*/)
-                          .setY(viewportPanelSize.height /*-offsety*/)
-                          .setWidth(float(viewportPanelSize.width))
+                          .setY(vkCanvasExtent.height /*-offsety*/)
+                          .setWidth(float(vkCanvasExtent.width))
                           .setHeight(-float(
-                              viewportPanelSize.height))  // negative viewport, opengl conformant
+                              vkCanvasExtent.height))  // negative viewport, opengl conformant
                           .setMinDepth(0.0f)
                           .setMaxDepth(1.0f);
 
                 (*renderCmd).setViewport(0, {viewport});
               }
-              (*renderCmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), viewportPanelSize)});
+              (*renderCmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});
               if (ctx.enabledDeviceFeatures.features.wideLines)
                 (*renderCmd).setLineWidth(2.0f);
               else
@@ -981,15 +981,15 @@ void main() {
 
       auto viewport = vk::Viewport()
                           .setX(0 /*offsetx*/)
-                          .setY(viewportPanelSize.height /*-offsety*/)
-                          .setWidth(float(viewportPanelSize.width))
+                          .setY(vkCanvasExtent.height /*-offsety*/)
+                          .setWidth(float(vkCanvasExtent.width))
                           .setHeight(-float(
-                              viewportPanelSize.height))  // negative viewport, opengl conformant
+                              vkCanvasExtent.height))  // negative viewport, opengl conformant
                           .setMinDepth(0.0f)
                           .setMaxDepth(1.0f);
 
       (*cmd).setViewport(0, {viewport});
-      (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), viewportPanelSize)});
+      (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});
       if (ctx.enabledDeviceFeatures.features.wideLines)
         (*cmd).setLineWidth(2.0f);
       else
@@ -1039,12 +1039,12 @@ void main() {
           = vk::Viewport()
                 .setX(0 /*offsetx*/)
                 .setY(0 /*-offsety*/)
-                .setWidth(float(viewportPanelSize.width))
-                .setHeight(float(viewportPanelSize.height))  // negative viewport, opengl conformant
+                .setWidth(float(vkCanvasExtent.width))
+                .setHeight(float(vkCanvasExtent.height))  // negative viewport, opengl conformant
                 .setMinDepth(0.0f)
                 .setMaxDepth(1.0f);
       (*cmd).setViewport(0, {viewport});
-      (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), viewportPanelSize)});
+      (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});
       (*cmd).bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                 /*pipeline layout*/ sceneAugmentRenderer.overlayPipeline.get(),
                                 /*firstSet*/ 0,

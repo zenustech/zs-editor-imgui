@@ -163,9 +163,9 @@ void main() {
     ensureLightListBuffer();
 
     // divide screen width per 32 pixels
-    sceneLighting.clusterCountPerLine = (viewportPanelSize.width + SceneLighting::CLUSTER_SCREEN_SIZE - 1) / SceneLighting::CLUSTER_SCREEN_SIZE;
+    sceneLighting.clusterCountPerLine = (vkCanvasExtent.width + SceneLighting::CLUSTER_SCREEN_SIZE - 1) / SceneLighting::CLUSTER_SCREEN_SIZE;
     // divide screen height per 32 pixels
-    sceneLighting.clusterCountPerDepth = sceneLighting.clusterCountPerLine * ((viewportPanelSize.height + SceneLighting::CLUSTER_SCREEN_SIZE - 1) / SceneLighting::CLUSTER_SCREEN_SIZE);
+    sceneLighting.clusterCountPerDepth = sceneLighting.clusterCountPerLine * ((vkCanvasExtent.height + SceneLighting::CLUSTER_SCREEN_SIZE - 1) / SceneLighting::CLUSTER_SCREEN_SIZE);
     sceneLighting.clusterCount = sceneLighting.clusterCountPerDepth * SceneLighting::CLUSTER_Z_SLICE; // divide screen depth into 32 parts
     sceneLighting.clusterLightInfoBuffer = ctx.createBuffer(
       sceneLighting.clusterCount * SceneLighting::CLUSTER_LIGHT_INDEX_CAPACITY * sizeof(int), // cluster light index list
@@ -269,7 +269,7 @@ void main() {
       vk::ShaderStageFlagBits::eCompute, sizeof(glm::mat4) + sizeof(glm::vec4), sizeof(glm::vec4),
       &cameraPos);
     // screen size and lightCount
-    const glm::ivec3 clusterInfo{ viewportPanelSize.width, viewportPanelSize.height, renderingLights };
+    const glm::ivec3 clusterInfo{ vkCanvasExtent.width, vkCanvasExtent.height, renderingLights };
     (*cmd).pushConstants(sceneLighting.clusterLightPipeline.get(),
       vk::ShaderStageFlagBits::eCompute, sizeof(glm::mat4) + sizeof(glm::vec4) * 2, sizeof(glm::ivec3),
       &clusterInfo);
