@@ -49,6 +49,22 @@ namespace zs {
     _collapsed = p->windowCollapsed();
     _docked = p->windowDocked();
   }
+
+  void WidgetNode::updateItemUIStates() {
+    _itemHovered = ImGui::IsItemHovered();
+    _itemFocused = ImGui::IsItemFocused();
+    _itemActive = ImGui::IsItemActive();
+    _itemActivated = ImGui::IsItemActivated();
+    _itemDeactivated = ImGui::IsItemDeactivated();
+    for (int i = 0; i < ImGuiMouseButton_COUNT; ++i) _itemClicked[i] = ImGui::IsItemClicked(i);
+    _itemVisible = ImGui::IsItemVisible();
+    _itemEdited = ImGui::IsItemEdited();
+
+    _itemID = ImGui::GetItemID();
+    _itemRectMin = ImGui::GetItemRectMin();
+    _itemRectMax = ImGui::GetItemRectMax();
+    _itemRectSize = ImGui::GetItemRectSize();
+  }
   /// WindowWidgetNode
   void WindowWidgetNode::updateWindowUIStates() {
     _focused = ImGui::IsWindowFocused();
@@ -66,7 +82,23 @@ namespace zs {
     }
 #endif
   }
+  void WidgetNode::paint() {
+    _widget->paint();
 
+    updateItemUIStates();
+
+    if (itemActivated())
+      _widget->onActivated();
+    else if (itemDeactivated())
+      _widget->onDeactivated();
+    if (itemActive()) _widget->onActive();
+    if (itemVisible()) _widget->onVisible();
+    if (itemFocused()) _widget->onFocused();
+    if (itemHovered()) _widget->onHovered();
+    for (int i = 0; i < ImGuiMouseButton_COUNT; ++i)
+      if (itemClicked(i)) _widget->onMouseButtonClicked(i);
+    if (itemEdited()) _widget->onEdited();
+  }
   void WindowWidgetNode::paint() {
     if (topLevel) {
       ImGuiViewport *viewport = ImGui::GetMainViewport();
@@ -120,12 +152,13 @@ namespace zs {
       ImGui::PopStyleColor();
 
       updateWindowUIStates();
+
       /// draw components and subwindows
       for (auto &comp : components) {
         match(
             [this](WidgetNode &widgetComponent) {
-              widgetComponent.paint();
               widgetComponent.updateWindowUIStates(this);
+              widgetComponent.paint();
             },
             [](Shared<WindowWidgetNode> &windowNode) { windowNode->paint(); })(comp._widget);
       }

@@ -665,7 +665,7 @@ void main()
 #endif
 
 #if ZS_ENABLE_USD
-    loadSampleScene();
+    // loadSampleScene();
     // loadUVTestScene();
 #endif
 

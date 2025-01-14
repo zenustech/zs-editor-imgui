@@ -86,18 +86,40 @@ namespace zs {
     bool _ownQueue{false};
   };
   struct WidgetBase {
+    // window
     bool windowFocused() const noexcept { return _focused; }
     bool windowHovered() const noexcept { return _hovered; }
     bool windowAppearing() const noexcept { return _appearing; }
     bool windowCollapsed() const noexcept { return _collapsed; }
     bool windowDocked() const noexcept { return _docked; }
+    // item
+    bool itemFocused() const noexcept { return _itemFocused; }
+    bool itemHovered() const noexcept { return _itemHovered; }
+    bool itemActive() const noexcept { return _itemActive; }
+    bool itemActivated() const noexcept { return _itemActivated; }
+    bool itemDeactivated() const noexcept { return _itemDeactivated; }
+    bool itemClicked(ImGuiMouseButton mb) const noexcept { return _itemClicked[mb]; }
+    bool itemVisible() const noexcept { return _itemVisible; }
+    bool itemEdited() const noexcept { return _itemEdited; }
+    ImGuiID itemID() const noexcept { return _itemID; }
+    ImVec2 itemRectMin() const noexcept { return _itemRectMin; }
+    ImVec2 itemRectMax() const noexcept { return _itemRectMax; }
+    ImVec2 itemRectSize() const noexcept { return _itemRectSize; }
     // properties
+
     // status
     bool _retainedAlike{false};
     bool _mouseTracking{false};  // tracking mouse move
 
+  protected:
     // window attributes
     bool _focused{false}, _hovered{false}, _appearing{false}, _collapsed{false}, _docked{false};
+    // item attributes
+    bool _itemHovered{false}, _itemFocused{false}, _itemActive{false}, _itemActivated{false},
+        _itemDeactivated{false}, _itemVisible{false}, _itemEdited{false};
+    bool _itemClicked[ImGuiMouseButton_COUNT] = {};
+    ImGuiID _itemID{0};
+    ImVec2 _itemRectMin{}, _itemRectMax{}, _itemRectSize{};
   };
 
   struct WindowWidgetNode;
@@ -108,10 +130,8 @@ namespace zs {
     }
 
     void updateWindowUIStates(WindowWidgetNode *p);
-    void paint() override {
-      _widget->paint();
-      // if (ImGui::IsItemHovered()) _widget->onHover();
-    }
+    void updateItemUIStates();
+    void paint() override;
     auto &refWidget() noexcept { return _widget; }
     const auto &refWidget() const noexcept { return _widget; }
 
