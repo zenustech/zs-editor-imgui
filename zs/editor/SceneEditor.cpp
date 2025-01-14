@@ -657,8 +657,6 @@ void main()
                                          /*binding*/ 0);
     loadSampleModels();
 
-    // loadGrid();
-
 #if ZS_ENABLE_USD
     auto fn = abs_exe_directory() + "/resource/usd/" + g_defaultUsdFile;
     auto defaultScene = ResourceSystem::load_usd(fn, g_defaultUsdLabel);
@@ -878,15 +876,17 @@ void main()
     ///
     sceneRenderData.camera = Camera();
     auto &camera = sceneRenderData.camera.get();
-    _camCtrl.trackCamera(camera);
+    // assert(getWidget()->getZsUserPointer());  // widget already initialized
+    getWidget();
+    _camCtrl.trackCamera(camera, *this);
 
     // camera.type = Camera::CameraType::lookat;
     camera.type = Camera::CameraType::firstperson;
     camera.setReversedZ(SceneEditor::reversedZ);
     camera.setPosition(glm::vec3(0.0f, 0.0f, -3.4f));
     camera.setRotation(glm::vec3(0.0f, 0.0f, 0.0f));
-    camera.setPerspective(45.0f, (float)viewportPanelSize.width / (float)viewportPanelSize.height,
-                          0.01f, 20000.0f);
+    camera.setPerspective(45.0f, (float)viewportPanelSize.width / (float)viewportPanelSize.height, 0.01f,
+                          20000.0f);
     camera.updateViewMatrix();
 
     {
@@ -1873,12 +1873,15 @@ void main()
 
   void SceneEditor::update(float dt) {
     /// handle input events
-    if (viewportFocused) {
-      inputMode.update(dt);
-    }
+    // if (viewportFocused) {
+    //   inputMode.update(dt);
+    // }
+
+    _camCtrl.update(dt);
+
     /// handle resize
     {
-      vk::Extent2D currentDim{(u32)vpPanelSize.x, (u32)vpPanelSize.y};
+      vk::Extent2D currentDim{(u32)imguiCanvasSize.x, (u32)imguiCanvasSize.y};
       if (currentDim.width != 0 && currentDim.height != 0
           && (currentDim.width != viewportPanelSize.width
               || currentDim.height != viewportPanelSize.height)) {

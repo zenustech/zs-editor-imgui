@@ -174,7 +174,7 @@ namespace zs {
     auto &viewportHovered = sceneEditor->viewportHovered;
     auto &viewportMousePos = sceneEditor->viewportMousePos;
 
-    auto &vpPanelSize = sceneEditor->vpPanelSize;  // scene
+    auto &imguiCanvasSize = sceneEditor->imguiCanvasSize;  // scene
 
     auto &viewportMinScreenPos = sceneEditor->viewportMinScreenPos;
     auto &viewportMaxScreenPos = sceneEditor->viewportMaxScreenPos;
@@ -278,11 +278,11 @@ namespace zs {
     ///
     /// scene area
     ///
-    vpPanelSize = ImGui::GetContentRegionAvail();
+    imguiCanvasSize = ImGui::GetContentRegionAvail();
     ImGui::SetNextItemAllowOverlap();
     ImGui::Image(
         (ImU64) reinterpret_cast<VkDescriptorSet *>(&sceneAttachments.renderedSceneColorSet),
-        vpPanelSize, ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImColor(0, 0, 0, 0));
+        imguiCanvasSize, ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImColor(0, 0, 0, 0));
 
     viewportMinScreenPos = ImGui::GetItemRectMin();
     viewportMaxScreenPos = ImGui::GetItemRectMax();
@@ -303,7 +303,7 @@ namespace zs {
     if (auto focusPrim = focusPrimPtr.lock(); enableGuizmo && inputMode.isEditMode() && focusPrim) {
       ImGuizmo::SetOrthographic(false);
       ImGuizmo::SetDrawlist();
-      ImGuizmo::SetRect(windowPos_.x, windowPos_.y, vpPanelSize.x, vpPanelSize.y);
+      ImGuizmo::SetRect(windowPos_.x, windowPos_.y, imguiCanvasSize.x, imguiCanvasSize.y);
       auto projection = sceneRenderData.camera.get().matrices.perspective;
       auto view = sceneRenderData.camera.get().matrices.view;
 
@@ -653,7 +653,7 @@ namespace zs {
     drawList->ChannelsMerge();
   }
   bool SceneEditorWidgetComponent::onEvent(GuiEvent *e) {
-    // if (sceneEditor->_camCtrl.onEvent(e)) return e->isAccepted();
+    if (sceneEditor->_camCtrl.onEvent(e)) return e->isAccepted();
     return false;
   }
 

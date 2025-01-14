@@ -37,13 +37,15 @@ namespace zs {
 #define ENABLE_OCCLUSION_QUERY 1
 
   struct CameraControl {
-    void trackCamera(Camera &camera);
+    void trackCamera(Camera &camera, SceneEditor &sceneEditor);
 
     enum key_direction_e : int {
       front,
       back,
       left,
       right,
+      up,
+      down,
       turn_left,
       turn_right,
       look_up,
@@ -60,17 +62,23 @@ namespace zs {
     Signal<void(const glm::vec3 &)> _orientationChanged;
 
     bool onEvent(GuiEvent *e) { return _cameraState.onEvent(e); }
+    void update(float dt);
 
     Camera *_cam;
+    SceneEditor *_editor;
     StateMachine _cameraState;
+    bool _dirty{false};
     // mouse
-    float _rotationSpeed{0.1f}, _sideTranslationSpeed{0.01f}, _advanceTranslationSpeed{0.02f};
+    float _mouseRotationScale{0.1f}, _mouseSideTranslationScale{0.01f},
+        _mouseAdvanceTranslationScale{0.2f};
     ImGuiMouseButton _mouseBindings[num_mouse_bindings]
         = {ImGuiMouseButton_Left, ImGuiMouseButton_Right, ImGuiMouseButton_Middle};
     // key
-    int _keyStates[num_directions] = {0, 0, 0, 0, 0, 0, 0, 0};
-    ImGuiKey _keyBindings[num_directions] = {ImGuiKey_W, ImGuiKey_S, ImGuiKey_A, ImGuiKey_D,
-                                             ImGuiKey_Q, ImGuiKey_E, ImGuiKey_R, ImGuiKey_F};
+    float _rotationSpeed{100.f}, _sideTranslationSpeed{0.01f}, _advanceTranslationSpeed{10.f};
+    int _keyStates[num_directions] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    ImGuiKey _keyBindings[num_directions]
+        = {ImGuiKey_W, ImGuiKey_S, ImGuiKey_A, ImGuiKey_D, ImGuiKey_Space,
+           ImGuiKey_C, ImGuiKey_Q, ImGuiKey_E, ImGuiKey_R, ImGuiKey_F};
   };
   ActionWidgetComponent get_widget(Camera &camera, void * = nullptr);
 
@@ -87,7 +95,7 @@ namespace zs {
     void frameStat();
 
     void drawPath();
-    Shared<SceneEditorWidgetComponent> getWidget();
+    Shared<SceneEditorWidgetComponent> &getWidget();
     ActionWidgetComponent getCameraWidget() {
       if (sceneRenderData.camera.isValid())
         return get_widget(sceneRenderData.camera.get(), this);
@@ -100,27 +108,21 @@ namespace zs {
     enum input_mode_e { _still = 0, _roaming, _select, _paint, _num_modes };
     struct SceneEditorRoamingMode {
       SceneEditorRoamingMode(SceneEditor &editor) : editor{editor} {}
-      void update(float dt);
       void paint();
       SceneEditor &editor;
     };
     struct SceneEditorSelectionMode {
       SceneEditorSelectionMode(SceneEditor &editor) : editor{editor} {}
-      void update(float dt);
       void paint();
       SceneEditor &editor;
     };
     struct SceneEditorPaintMode {
       SceneEditorPaintMode(SceneEditor &editor) : editor{editor} {}
-      void update(float dt);
       void paint();
       SceneEditor &editor;
     };
 
     struct SceneEditorInputMode {
-      void update(float dt) {
-        match([](std::monostate) {}, [dt](auto &input) { input.get().update(dt); })(_modes);
-      }
       void paint() {
         match([](std::monostate) {}, [](auto &input) { input.get().paint(); })(_modes);
       }
@@ -153,10 +155,10 @@ namespace zs {
     ///
     /// viewport ui status
     ///
-    bool viewportFocused, viewportHovered;
+    bool viewportFocused{false}, viewportHovered{false};
     /// @note different from viewportHovered, mouse might hover overlaying widgets
     bool sceneHovered, sceneClicked;
-    ImVec2 viewportMinScreenPos, viewportMaxScreenPos, vpPanelSize;
+    ImVec2 viewportMinScreenPos, viewportMaxScreenPos, imguiCanvasSize;
     bool guizmoUseSnap{true};
     float scaleSnap{0.1f}, rotSnap{10.f}, transSnap{0.1f};
     bool enableGuizmoScale{true}, enableGuizmoRot{true}, enableGuizmoTrans{true};

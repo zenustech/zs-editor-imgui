@@ -164,7 +164,7 @@ namespace zs {
   }
 
   void GUIWindow::setupGUI() {
-    globalWidget = WindowWidgetNode(
+    this->globalWidget = std::make_shared<WindowWidgetNode>(
         "Root", nullptr,
         ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar
             | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
@@ -173,8 +173,7 @@ namespace zs {
     // rootWidget.setupMessageQueue();
     states._eventQueue.setupMessageQueue();
 
-    // WindowWidgetNode &globalWidget = refGlobalWidget();
-    WindowWidgetNode &globalWidget = this->globalWidget;
+    WindowWidgetNode &globalWidget = refGlobalWidget();
 
     globalWidget.setStyle(ImGuiStyleVar_WindowRounding, 0.0f);
     globalWidget.setStyle(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -466,9 +465,13 @@ namespace zs {
     ResourceSystem::register_widget(g_defaultWidgetLabelScene,
                                     states.sceneEditor.get().getWidget());
     sceneView.appendComponent(ResourceSystem::ref_widget(g_defaultWidgetLabelScene));
-    globalWidget.appendChild(move(sceneView));
+    fmt::print("validate (widget addr: {}): user pointer (widget node) {}\n",
+               (void *)states.sceneEditor.get().getWidget().get(),
+               states.sceneEditor.get().getWidget()->getZsUserPointer());
 
     /// terminal (placeholder)
+    globalWidget.appendChild(move(sceneView));
+
     auto terminalWidget = WindowWidgetNode{(const char *)(ICON_MD_CODE u8"控制台"), &globalWidget};
     terminalWidget.appendComponent(
         TerminalWidgetComponent{(const char *)ICON_MD_CODE u8"控制台", states.terminal});
@@ -656,7 +659,7 @@ namespace zs {
   }
 
   void GUIWindow::drawGUI() {
-    globalWidget.paint();
+    refGlobalWidget().paint();
     ImGui::ShowDemoWindow();
   }
 

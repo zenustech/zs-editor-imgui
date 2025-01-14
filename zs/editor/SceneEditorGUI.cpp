@@ -41,15 +41,28 @@ namespace zs {
       auto e_ = std::get<GuiEvent *>(e__);
 
       switch (e_->getGuiEventType()) {
-        case gui_event_mousePressed: {
-          auto e = dynamic_cast<MousePressEvent *>(e_);
-          auto idx = cameraCtrl.findMouseAction(e->button());
-          if (idx != -1) {
-            activeMouseButton = e->button();
-            mouseAction = idx;
+        case gui_event_mousePressed:
+          if (((WidgetNode *)cameraCtrl._editor->getWidget()->getZsUserPointer())
+                  ->windowHovered()) {
+#if 0
+            fmt::print(
+                "scene editor widget addr: {} (widget node pointer: {}, recorded: {}), hovered: "
+                "{}\n",
+                (void *)cameraCtrl._editor->getWidget().get(),
+                (void *)cameraCtrl._editor->getWidget()->getZsUserPointer(),
+                (void *)cameraCtrl._widget,
+                ((WidgetNode *)cameraCtrl._editor->getWidget()->getZsUserPointer())
+                    ->windowHovered());
+            // (void *)cameraCtrl._widget->refWidget().get());
+#endif
+            auto e = dynamic_cast<MousePressEvent *>(e_);
+            auto idx = cameraCtrl.findMouseAction(e->button());
+            if (idx != -1) {
+              activeMouseButton = e->button();
+              mouseAction = idx;
+            }
           }
           break;
-        }
         case gui_event_mouseReleased: {
           auto e = dynamic_cast<MouseReleaseEvent *>(e_);
           if (activeMouseButton == e->button()) {
@@ -64,45 +77,106 @@ namespace zs {
           auto delta = e->getDelta();
           switch (mouseAction) {
             case CameraControl::mouse_action_e::rotate: {
-              camera.yaw(delta.x * cameraCtrl._rotationSpeed);
-              camera.pitch(-delta.y * cameraCtrl._rotationSpeed);
+              camera.yaw(delta.x * cameraCtrl._mouseRotationScale);
+              camera.pitch(-delta.y * cameraCtrl._mouseRotationScale);
+
+              cameraCtrl._dirty = true;
               // camera.updateViewMatrix();
               // editor.sceneAugmentRenderer.overlayTextNeedUpdate = true;
               break;
             }
             case CameraControl::mouse_action_e::translate_side: {
-              camera.translateHorizontal(-delta.x * cameraCtrl._sideTranslationSpeed);
-              camera.translateVertical(delta.y * cameraCtrl._sideTranslationSpeed);
+              camera.translateHorizontal(-delta.x * cameraCtrl._mouseSideTranslationScale);
+              camera.translateVertical(delta.y * cameraCtrl._mouseSideTranslationScale);
+
+              cameraCtrl._dirty = true;
               break;
             }
             case CameraControl::mouse_action_e::translate_advance: {
-              camera.translateForward(-delta.x * cameraCtrl._advanceTranslationSpeed);
-              camera.translateHorizontal(delta.y * cameraCtrl._advanceTranslationSpeed);
+              camera.translateForward(-delta.y * cameraCtrl._mouseAdvanceTranslationScale);
+              camera.translateHorizontal(delta.x * cameraCtrl._mouseAdvanceTranslationScale);
+
+              cameraCtrl._dirty = true;
               break;
             }
             default:;
           }
           break;
         }
-        case gui_event_keyPressed: {
-          auto e = dynamic_cast<KeyPressEvent *>(e_);
-          auto idx = cameraCtrl.findDirectionIndex(e->key());
-          cameraCtrl.setKeyState(idx, 1);
+        case gui_event_keyPressed:
+          if (cameraCtrl._editor->viewportFocused) {
+            auto e = dynamic_cast<KeyPressEvent *>(e_);
+            auto idx = cameraCtrl.findDirectionIndex(e->key());
+            if (idx >= 0) cameraCtrl.setKeyState(idx, 1);
+          }
           break;
-        }
-        case gui_event_keyReleased: {
-          auto e = dynamic_cast<KeyReleaseEvent *>(e_);
-          auto idx = cameraCtrl.findDirectionIndex(e->key());
-          cameraCtrl.setKeyState(idx, 0);
+        case gui_event_keyReleased:
+          if (cameraCtrl._editor->viewportFocused) {
+            auto e = dynamic_cast<KeyReleaseEvent *>(e_);
+            auto idx = cameraCtrl.findDirectionIndex(e->key());
+            if (idx >= 0) cameraCtrl.setKeyState(idx, 0);
+          }
           break;
-        }
         default:
           break;
       }  // end guievent switch
     }
   }
-  void CameraControl::trackCamera(Camera &camera) {
+
+  void CameraControl::update(float dt) {
+    Camera &camera = *_cam;
+    // check key states
+    if (_keyStates[key_direction_e::front]) {
+      camera.translateForward(dt * _advanceTranslationSpeed);
+      _dirty = true;
+    }
+    if (_keyStates[key_direction_e::back]) {
+      camera.translateForward(-dt * _advanceTranslationSpeed);
+      _dirty = true;
+    }
+    if (_keyStates[key_direction_e::left]) {
+      camera.translateHorizontal(-dt * _advanceTranslationSpeed);
+      _dirty = true;
+    }
+    if (_keyStates[key_direction_e::right]) {
+      camera.translateHorizontal(dt * _advanceTranslationSpeed);
+      _dirty = true;
+    }
+    if (_keyStates[key_direction_e::up]) {
+      camera.translateVertical(dt * _advanceTranslationSpeed);
+      _dirty = true;
+    }
+    if (_keyStates[key_direction_e::down]) {
+      camera.translateVertical(-dt * _advanceTranslationSpeed);
+      _dirty = true;
+    }
+
+    if (_keyStates[key_direction_e::turn_left]) {
+      camera.yaw(-dt * _rotationSpeed);
+      _dirty = true;
+    }
+    if (_keyStates[key_direction_e::turn_right]) {
+      camera.yaw(dt * _rotationSpeed);
+      _dirty = true;
+    }
+    if (_keyStates[key_direction_e::look_up]) {
+      camera.pitch(dt * _rotationSpeed);
+      _dirty = true;
+    }
+    if (_keyStates[key_direction_e::look_down]) {
+      camera.pitch(-dt * _rotationSpeed);
+      _dirty = true;
+    }
+
+    if (_dirty) {
+      camera.updateViewMatrix();
+      _editor->sceneAugmentRenderer.overlayTextNeedUpdate = true;
+      _dirty = false;
+    }
+  }
+  void CameraControl::trackCamera(Camera &camera, SceneEditor &sceneEditor) {
     _cam = zs::addressof(camera);
+    _editor = zs::addressof(sceneEditor);
     _cameraState = camera_control_statemachine(*this);  // reset state
   }
 
@@ -150,10 +224,9 @@ namespace zs {
       if (ImGui::DragFloat3("rotation", (float *)&rotation, rotUnit, -FLT_MAX, FLT_MAX, "%.3f", 0))
         camera.setRotation(rotation);
       ImGui::Separator();
-      auto dir = camera.getCameraRayDirection(sceneEditor->viewportMousePos[0],
-                                              sceneEditor->viewportMousePos[1],
-                                              (float)sceneEditor->viewportPanelSize.width,
-                                              (float)sceneEditor->viewportPanelSize.height);
+      auto dir = camera.getCameraRayDirection(
+          sceneEditor->viewportMousePos[0], sceneEditor->viewportMousePos[1],
+          (float)sceneEditor->viewportPanelSize.width, (float)sceneEditor->viewportPanelSize.height);
       auto dirText
           = fmt::format("mouse-pointing camera ray: \n{}, {}, {}\n", dir[0], dir[1], dir[2]);
       auto wrapWidth = ImGui::GetContentRegionAvail().x;
@@ -173,139 +246,8 @@ namespace zs {
     };
   }
 
-  void SceneEditor::SceneEditorRoamingMode::update(float dt) {
-    /// camera
-    ImGuiIO &io = ImGui::GetIO();
-    bool needUpdate = false;
-    auto &camera = editor.sceneRenderData.camera.get();
-    float intensity = 10.0f;
-    /// key
-    if (ImGui::IsKeyDown(ImGuiKey_W)) {
-      camera.translateForward(dt * intensity);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_S)) {
-      camera.translateForward(-dt * intensity);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_A)) {
-      camera.translateHorizontal(-dt * intensity);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_D)) {
-      camera.translateHorizontal(dt * intensity);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_C)) {
-      camera.translateVertical(-dt * intensity);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_V) || ImGui::IsKeyDown(ImGuiKey_Space)) {
-      camera.translateVertical(dt * intensity);
-      needUpdate = true;
-    }
-
-    if (ImGui::IsKeyDown(ImGuiKey_Q)) {
-      camera.yaw(-dt * 100);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_E)) {
-      camera.yaw(dt * 100);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_R)) {
-      camera.pitch(dt * 100);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_F)) {
-      camera.pitch(-dt * 100);
-      needUpdate = true;
-    }
-    if (!ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
-      bool moved = io.MouseDelta.x != 0 || io.MouseDelta.y != 0;
-      /// mouse
-      if (ImGui::IsMouseDown(0)) {  // left
-        camera.yaw(io.MouseDelta.x * 0.1);
-        camera.pitch(-io.MouseDelta.y * 0.1);
-        if (moved) needUpdate = true;
-      }
-      if (ImGui::IsMouseDown(1)) {  // right
-        camera.translateHorizontal(-io.MouseDelta.x * 0.01);
-        camera.translateVertical(io.MouseDelta.y * 0.01);
-        if (moved) needUpdate = true;
-      }
-      if (ImGui::IsMouseDown(2)) {  // middle
-        camera.translateForward(-io.MouseDelta.y * 0.02);
-        camera.translateHorizontal(io.MouseDelta.x * 0.02);
-        if (moved) needUpdate = true;
-      }
-    }
-    // if (io.MouseWheel != 0.f)
-    //   camera.translateForward(io.MouseWheel * 0.6);
-    ///
-    if (needUpdate) {
-      camera.updateViewMatrix();
-      editor.sceneAugmentRenderer.overlayTextNeedUpdate = true;
-    }
-  }
-
   void SceneEditor::SceneEditorRoamingMode::paint() {}
 
-  void SceneEditor::SceneEditorSelectionMode::update(float dt) {
-    /// camera
-    ImGuiIO &io = ImGui::GetIO();
-    bool needUpdate = false;
-    auto &camera = editor.sceneRenderData.camera.get();
-    /// key
-    if (ImGui::IsKeyDown(ImGuiKey_W)) {
-      camera.translateForward(dt * 1.5);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_S)) {
-      camera.translateForward(-dt * 1.5);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_A)) {
-      camera.translateHorizontal(-dt * 1.5);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_D)) {
-      camera.translateHorizontal(dt * 1.5);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_C)) {
-      camera.translateVertical(-dt * 1.5);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_V) || ImGui::IsKeyDown(ImGuiKey_Space)) {
-      camera.translateVertical(dt * 1.5);
-      needUpdate = true;
-    }
-
-    if (ImGui::IsKeyDown(ImGuiKey_Q)) {
-      camera.yaw(-dt * 100);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_E)) {
-      camera.yaw(dt * 100);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_R)) {
-      camera.pitch(dt * 100);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_F)) {
-      camera.pitch(-dt * 100);
-      needUpdate = true;
-    }
-    if (!ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
-      ;
-    }
-    if (needUpdate) {
-      camera.updateViewMatrix();
-      editor.sceneAugmentRenderer.overlayTextNeedUpdate = true;
-    }
-  }
   void SceneEditor::SceneEditorSelectionMode::paint() {
     ImDrawList *drawList = ImGui::GetWindowDrawList();
     drawList->ChannelsSetCurrent(_interaction);
@@ -344,61 +286,6 @@ namespace zs {
   }
 
   /// paint
-  void SceneEditor::SceneEditorPaintMode::update(float dt) {
-    /// camera
-    ImGuiIO &io = ImGui::GetIO();
-    bool needUpdate = false;
-    auto &camera = editor.sceneRenderData.camera.get();
-    /// key
-    if (ImGui::IsKeyDown(ImGuiKey_W)) {
-      camera.translateForward(dt * 1.5);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_S)) {
-      camera.translateForward(-dt * 1.5);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_A)) {
-      camera.translateHorizontal(-dt * 1.5);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_D)) {
-      camera.translateHorizontal(dt * 1.5);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_C)) {
-      camera.translateVertical(-dt * 1.5);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_V) || ImGui::IsKeyDown(ImGuiKey_Space)) {
-      camera.translateVertical(dt * 1.5);
-      needUpdate = true;
-    }
-
-    if (ImGui::IsKeyDown(ImGuiKey_Q)) {
-      camera.yaw(-dt * 100);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_E)) {
-      camera.yaw(dt * 100);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_R)) {
-      camera.pitch(dt * 100);
-      needUpdate = true;
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_F)) {
-      camera.pitch(-dt * 100);
-      needUpdate = true;
-    }
-    if (!ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
-      ;
-    }
-    if (needUpdate) {
-      camera.updateViewMatrix();
-      editor.sceneAugmentRenderer.overlayTextNeedUpdate = true;
-    }
-  }
   void SceneEditor::SceneEditorPaintMode::paint() {
     ImDrawList *drawList = ImGui::GetWindowDrawList();
     drawList->ChannelsSetCurrent(_interaction);
@@ -423,153 +310,9 @@ namespace zs {
   ///
   /// final widget
   ///
-  void SceneEditor::drawPath() {
-    // helper
-    auto searchIndex = [](const auto &candidates, const auto &candidate) -> int {
-      for (int i = 0; i < candidates.size(); ++i)
-        if (candidates[i] == candidate) return i;
-      return -1;
-    };
-
-    bool selectionChanged = false;
-
-    const ImGuiComboFlags flags = ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_WidthFitPreview;
-    /// primary (scene context)
-    auto sceneLabels = zs_resources().get_scene_context_labels();
-    // find current selected
-    int idx = searchIndex(sceneLabels, sceneRenderData.sceneLabel);
-    if (ImGui::BeginCombo("##scene_context_selection", (const char *)ICON_MD_ARROW_FORWARD,
-                          flags)) {
-      ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
-      for (int i = 0; i < sceneLabels.size(); ++i) {
-        const bool selected = idx == i;
-        if (ImGui::Selectable(sceneLabels[i].c_str(), selected)) {
-          idx = i;
-          sceneRenderData.sceneLabel = sceneLabels[idx];
-          sceneRenderData.path.resize(0);
-
-          selectionChanged = true;  // *
-        }
-        if (selected) ImGui::SetItemDefaultFocus();
-      }
-      ImGui::PopStyleVar(1);
-      ImGui::EndCombo();
-    }
-    if (idx != -1) {
-      ImGui::SameLine();
-      bool selected = sceneRenderData.selectedObj == -1;
-      if (selected) {
-        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.f, 1.f, 0, 1.f));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2);
-      }
-      if (ImGui::Button(sceneLabels[idx].c_str())) {
-        sceneRenderData.selectedObj = -1;
-        selectionChanged = true;  // *
-        // sceneRenderData.path.resize(0);
-      }
-      if (selected) {
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor(2);
-      }
-    }
-    /// secondary (scene prims)
-    if (idx != -1) {
-      SceneContext &currentScene = zs_resources().get_scene_context(sceneRenderData.sceneLabel);
-      auto primLabels = currentScene.getPrimitiveLabels();
-      // find current selected
-      int primIdx = -1;
-      if (sceneRenderData.path.size() > 0)
-        primIdx = searchIndex(primLabels, sceneRenderData.path[0]);
-
-      ImGui::SameLine();
-      auto label = fmt::format("##scene_prim_selection_{}", 0);
-      if (ImGui::BeginCombo(label.c_str(), (const char *)ICON_MD_ARROW_FORWARD, flags)) {
-        for (int i = 0; i < primLabels.size(); ++i) {
-          const bool selected = primIdx == i;
-          if (ImGui::Selectable(primLabels[i].c_str(), selected)) {
-            primIdx = i;
-            sceneRenderData.path.resize(1);
-            sceneRenderData.path[0] = primLabels[i];
-            if (sceneRenderData.selectedObj > 0) sceneRenderData.selectedObj = -1;
-            selectionChanged = true;  // *
-          }
-          if (selected) ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-      }
-      ZsPrimitive *prim = nullptr;
-      std::string parentLabel;
-      if (primIdx != -1) {
-        parentLabel = primLabels[primIdx];
-        prim = currentScene.getPrimitive(parentLabel).lock().get();
-        primLabels = prim->getChildLabels();
-      }
-
-      /// drawing l-th level, primIdx-th prim
-      auto drawLevel = [&searchIndex, &selectionChanged, this](int l, std::string &parentLabel,
-                                                               int &primIdx, auto &primLabels,
-                                                               ZsPrimitive *&prim) {
-        assert(primIdx != -1 && prim);
-        ImGui::SameLine();
-        auto buttonLabel = fmt::format("{}##scene_prim_popup_{}", parentLabel, l);
-        // sceneRenderData.selectedObj;
-
-        bool selected = sceneRenderData.selectedObj == l;
-        if (selected) {
-          ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-          ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.f, 1.f, 0, 1.f));
-          ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 2);
-        }
-        if (ImGui::Button(buttonLabel.c_str())) {
-          sceneRenderData.selectedObj = selected ? -1 : l;
-          // sceneRenderData.path.resize(l + 1);
-          selectionChanged = true;  // *
-        }
-        if (selected) {
-          ImGui::PopStyleVar();
-          ImGui::PopStyleColor(2);
-        }
-
-        // moving forward to next level, update primLabels, primIdx
-        ++l;
-        primIdx = -1;
-        if (sceneRenderData.path.size() > l)
-          primIdx = searchIndex(primLabels, sceneRenderData.path[l]);
-
-        ImGui::SameLine();
-        auto label = fmt::format("##scene_prim_selection_{}", l);
-        if (ImGui::BeginCombo(label.c_str(), (const char *)ICON_MD_ARROW_FORWARD, flags)) {
-          for (int i = 0; i < primLabels.size(); ++i) {
-            const bool selected = primIdx == i;
-            if (ImGui::Selectable(primLabels[i].c_str(), selected)) {
-              primIdx = i;
-              sceneRenderData.path.resize(l + 1);
-              sceneRenderData.path[l] = primLabels[i];
-              if (sceneRenderData.selectedObj > l) sceneRenderData.selectedObj = -1;
-              selectionChanged = true;  // *
-            }
-            if (selected) ImGui::SetItemDefaultFocus();
-          }
-          ImGui::EndCombo();
-        }
-
-        if (primIdx != -1) {
-          parentLabel = primLabels[primIdx];
-          prim = prim->getChild(primIdx).lock().get();
-          primLabels = prim->getChildLabels();
-        } else
-          prim = nullptr;
-      };
-      int l = 0;
-      while (primIdx != -1 && l < sceneRenderData.path.size())
-        drawLevel(l++, parentLabel, primIdx, primLabels, prim);
-    }
-
-    if (selectionChanged) onVisiblePrimsChanged.emit(getCurrentScenePrims());
-  }
-  Shared<SceneEditorWidgetComponent> SceneEditor::getWidget() {
+  Shared<SceneEditorWidgetComponent> &SceneEditor::getWidget() {
     if (!_widget) _widget = std::make_shared<SceneEditorWidgetComponent>(this);
+    // fmt::print("\n\n\ncurrent scene editor widget addr: {}\n\n\n", (void *)_widget.get());
     return _widget;
   }
 

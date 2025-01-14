@@ -228,7 +228,7 @@ namespace zs {
     };
 
     // WindowWidgetNode &refGlobalWidget() { return *rootWidget.widget<WindowWidgetNode>(); }
-    WindowWidgetNode &refGlobalWidget() { return globalWidget; }
+    WindowWidgetNode &refGlobalWidget() { return *globalWidget; }
     void spawnImguiEvents();
     void tryConsumingRemainingEvents(const std::vector<GuiEvent *> &evs);
 
@@ -236,7 +236,7 @@ namespace zs {
     friend struct ImguiSystem;
 
     InteractiveStates states;
-    WindowWidgetNode globalWidget;
+    Shared<WindowWidgetNode> globalWidget;
     // InternalWidget rootWidget;
 
     GLFWwindow *window;

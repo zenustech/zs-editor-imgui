@@ -86,21 +86,32 @@ namespace zs {
     bool _ownQueue{false};
   };
   struct WidgetBase {
-    ;
-    ;
+    bool windowFocused() const noexcept { return _focused; }
+    bool windowHovered() const noexcept { return _hovered; }
+    bool windowAppearing() const noexcept { return _appearing; }
+    bool windowCollapsed() const noexcept { return _collapsed; }
+    bool windowDocked() const noexcept { return _docked; }
     // properties
     // status
     bool _retainedAlike{false};
     bool _mouseTracking{false};  // tracking mouse move
-    bool _focused{false}, _hovered{true};
+
+    // window attributes
+    bool _focused{false}, _hovered{false}, _appearing{false}, _collapsed{false}, _docked{false};
   };
+
+  struct WindowWidgetNode;
   struct WidgetNode : WidgetBase, WidgetConcept {
     WidgetNode() = default;
     WidgetNode(Shared<WidgetConcept> widget, WidgetConcept *p = nullptr) : _widget{widget} {
       setParent(p);
     }
 
-    void paint() override { _widget->paint(); }
+    void updateWindowUIStates(WindowWidgetNode *p);
+    void paint() override {
+      _widget->paint();
+      // if (ImGui::IsItemHovered()) _widget->onHover();
+    }
     auto &refWidget() noexcept { return _widget; }
     const auto &refWidget() const noexcept { return _widget; }
 

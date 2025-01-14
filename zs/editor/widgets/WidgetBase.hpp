@@ -1,4 +1,5 @@
 #pragma once
+#include <list>
 #include <optional>
 
 #include "WidgetComponent.hpp"
@@ -221,6 +222,16 @@ namespace zs {
                      })(_widget);
       }
 
+      WidgetConcept *refWidgetPtr() {
+        return match(
+            [](WidgetNode &n) -> WidgetConcept * { return n.refWidget().get(); },
+            [](Shared<WindowWidgetNode> &n) -> WidgetConcept * { return n.get(); })(_widget);
+      }
+      void *refNodePtr() {
+        return match([](WidgetNode &n) -> void * { return zs::addressof(n); },
+                     [](Shared<WindowWidgetNode> &n) -> void * { return n.get(); })(_widget);
+      }
+
       GenericWidgetElement _widget;
     };
 
@@ -242,70 +253,8 @@ namespace zs {
     WindowWidgetNode(WindowWidgetNode &&o) = default;
     WindowWidgetNode &operator=(WindowWidgetNode &&o) = default;
 
-    void paint() override {
-      if (topLevel) {
-        ImGuiViewport *viewport = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(viewport->Pos);
-        ImGui::SetNextWindowSize(viewport->Size);
-        ImGui::SetNextWindowViewport(viewport->ID);
-      }
-      push();
-      bool windowOpened = false;
-      if (openStatus) {
-        bool &allowClose = *openStatus;
-        if (allowClose == false) {
-          pop();
-          return;
-        }
-        windowOpened = ImGui::Begin(name.data(), &allowClose, flags);
-      } else
-        windowOpened = ImGui::Begin(name.data(), nullptr, flags);
-      pop();
-
-      /// dockspace
-      if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable) {
-        auto dockId = ImGui::GetID(layoutBuilder.dockspaceName().data());
-        if ((!ImGui::DockBuilderGetNode(dockId) || dockSpaceNeedRebuild)
-            && layoutBuilder.hasBuildRoutine()) {
-          dockSpaceNeedRebuild = false;
-          layoutBuilder.buildByRoutine();
-        }
-        if (ImGui::DockBuilderGetNode(dockId)) {
-          ImGui::DockSpace(dockId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
-        }
-      }
-
-      if (!windowOpened) {
-        ImGui::End();
-        return;
-      }
-
-      if (!isFirstFrame) {
-        if (menu) {
-          (*menu).paint();
-        }
-
-        // ImGui::PushStyleColor(ImGuiCol_FrameBg, ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
-        // ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(105, 105, 105, 255));
-        // ImGui::PushStyleColor(ImGuiCol_ChildBg, IM_COL32(43, 43, 43, 255));
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, g_almost_dark_color);
-        // ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(43, 43, 43, 255));
-        if (!topLevel)
-          ImGui::BeginChild("#root_child", ImGui::GetContentRegionAvail(), ImGuiChildFlags_None);
-        ImGui::PopStyleColor();
-
-        /// draw components and subwindows
-        for (auto &comp : components) {
-          match([](WidgetNode &widgetComponent) { widgetComponent.paint(); },
-                [](Shared<WindowWidgetNode> &windowNode) { windowNode->paint(); })(comp._widget);
-        }
-
-        if (!topLevel) ImGui::EndChild();
-      } else
-        isFirstFrame = false;
-
-      ImGui::End();
-    }
+    void updateWindowUIStates();  //
+    void paint() override;
     bool onEvent(GuiEvent *e) override {
       for (auto &comp : components) {
         if (match([e](WidgetNode &widgetComponent) { return widgetComponent.onEvent(e); },
@@ -319,19 +268,41 @@ namespace zs {
     template <typename ChildT> void appendComponent(ChildT &&widget) {
       components.emplace_back(
           WidgetNode{zs::make_shared<remove_cvref_t<ChildT>>(FWD(widget)), this});
+      components.back().refWidgetPtr()->setZsUserPointer(components.back().refNodePtr());
+      fmt::print("\n\twidget [type: {}, addr: {}] user pointer: {} (ref: {})\n",
+                 get_type_str<ChildT>(), (void *)components.back().refWidgetPtr(),
+                 components.back().refWidgetPtr()->getZsUserPointer(),
+                 (void *)components.back().refNodePtr());
     }
     template <typename ChildT, enable_if_t<is_base_of_v<WidgetConcept, ChildT>> = 0>
-    void appendComponent(Shared<ChildT> &&widget) {
-      components.emplace_back(WidgetNode{Shared<WidgetConcept>{FWD(widget)}, this});
+    void appendComponent(Shared<ChildT> widget) {
+      components.emplace_back(WidgetNode{widget, this});
+      components.back().refWidgetPtr()->setZsUserPointer(components.back().refNodePtr());
+      fmt::print("\n\twidget [type: {}, addr: {} (ref: {})] user pointer: {} (ref: {})\n",
+                 get_type_str<ChildT>(), (void *)components.back().refWidgetPtr(),
+                 (void *)widget.get(), components.back().refWidgetPtr()->getZsUserPointer(),
+                 (void *)components.back().refNodePtr());
     }
     template <typename ChildT, enable_if_t<is_base_of_v<WidgetConcept, ChildT>> = 0>
     void appendComponent(ChildT *widget) {
       components.emplace_back(WidgetNode{Shared<ChildT>{widget}, this});
+      components.back().refWidgetPtr()->setZsUserPointer(components.back().refNodePtr());
+      fmt::print("\n\twidget [type: {}, addr: {}] user pointer: {} (ref: {})\n",
+                 get_type_str<ChildT>(), (void *)components.back().refWidgetPtr(),
+                 components.back().refWidgetPtr()->getZsUserPointer(),
+                 (void *)components.back().refNodePtr());
     }
 
     void appendChild(WindowWidgetNode &&widget) {
       components.emplace_back(std::make_shared<WindowWidgetNode>(zs::move(widget)));
       components.back().widget<WindowWidgetNode>()->setParent(this);
+      // components.back().widget<WindowWidgetNode>()->setZsUserPointer(
+      //     components.back().refWidgetPtr());
+      components.back().refWidgetPtr()->setZsUserPointer(components.back().refNodePtr());
+      fmt::print("\n\twidget [type: window, addr: {}] user pointer: {} (ref: {})\n",
+                 (void *)components.back().refWidgetPtr(),
+                 components.back().refWidgetPtr()->getZsUserPointer(),
+                 (void *)components.back().refNodePtr());
     }
 
     void setMenuComponent(MenuBarWidgetComponent &&w) { menu = zs::move(w); }
@@ -369,7 +340,7 @@ namespace zs {
     DockingLayoutBuilder layoutBuilder;
     // contents
     std::optional<MenuBarWidgetComponent> menu;
-    std::vector<WidgetEntry> components;
+    std::list<WidgetEntry> components;  // keep entry address stable upon insertion, etc.
     // states
     bool topLevel;
     bool isFirstFrame{true};

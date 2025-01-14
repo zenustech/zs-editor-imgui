@@ -5,8 +5,8 @@
 #include "imgui.h"
 #include "interface/world/value_type/ValueInterface.hpp"
 #include "python/Init.hpp"
-#include "world/system/ResourceSystem.hpp"
 #include "world/World.hpp"
+#include "world/system/ResourceSystem.hpp"
 #include "zensim/io/MeshIO.hpp"
 #include "zensim/vulkan/Vulkan.hpp"
 
@@ -293,9 +293,6 @@ namespace zs {
 
     mainViewport->RendererUserData = IM_NEW(ImGuiVkRendererViewportData)();
 
-    //
-    setupGUI();
-
     ///
     /// vulkan
     ///
@@ -318,9 +315,12 @@ namespace zs {
       states.cmds.push_back(
           ctx.createCommandBuffer(vk_cmd_usage_e::reset, vk_queue_e::graphics, false));
 
-    states.renderer = ImguiVkRenderer{this, ctx, rp, swapchain.getSampleBits(), num_buffered_frames};
+    states.renderer
+        = ImguiVkRenderer{this, ctx, rp, swapchain.getSampleBits(), num_buffered_frames};
 
     states.sceneEditor = SceneEditor();
+
+    //
     states.sceneEditor.get().setup(ctx, states.renderer.get());
 
     {
@@ -333,6 +333,8 @@ namespace zs {
       ResourceSystem::update_icon_texture(ctx, icon_e::file, "file-line.png");
       ResourceSystem::update_icon_texture(ctx, icon_e::folder, "folder-line.png");
     }
+
+    setupGUI();  // some widgets are from SceneEditor, must be setup later!
 
     ///
     zs_setup_world();
