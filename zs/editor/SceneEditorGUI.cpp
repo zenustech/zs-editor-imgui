@@ -42,8 +42,9 @@ namespace zs {
 
       switch (e_->getGuiEventType()) {
         case gui_event_mousePressed:
-          if (((WidgetNode *)cameraCtrl._editor->getWidget()->getZsUserPointer())
-                  ->windowHovered()) {
+          // if (((WidgetNode *)cameraCtrl._editor->getWidget()->getZsUserPointer())
+          //        ->windowHovered())
+          if (cameraCtrl._editor->sceneHovered) {
 #if 0
             fmt::print(
                 "scene editor widget addr: {} (widget node pointer: {}, recorded: {}), hovered: "
@@ -225,7 +226,7 @@ namespace zs {
         camera.setRotation(rotation);
       ImGui::Separator();
       auto dir = camera.getCameraRayDirection(
-          sceneEditor->viewportMousePos[0], sceneEditor->viewportMousePos[1],
+          sceneEditor->canvasLocalMousePos[0], sceneEditor->canvasLocalMousePos[1],
           (float)sceneEditor->vkCanvasExtent.width, (float)sceneEditor->vkCanvasExtent.height);
       auto dirText
           = fmt::format("mouse-pointing camera ray: \n{}, {}, {}\n", dir[0], dir[1], dir[2]);
@@ -246,67 +247,6 @@ namespace zs {
     };
   }
 
-  void SceneEditor::SceneEditorRoamingMode::paint() {}
-
-  void SceneEditor::SceneEditorSelectionMode::paint() {
-    ImDrawList *drawList = ImGui::GetWindowDrawList();
-    drawList->ChannelsSetCurrent(_interaction);
-
-    /// selection
-    if (editor.sceneClicked) editor.selectionStart = ImGui::GetMousePos();
-    if (editor.selectionStart.has_value() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-      // if (ImGui::IsItemHovered()) selectionEnd = ImGui::GetMousePos();
-      editor.selectionEnd = ImGui::GetMousePos();
-      (*editor.selectionEnd).x = std::clamp((*editor.selectionEnd).x, editor.viewportMinScreenPos.x,
-                                            editor.viewportMaxScreenPos.x);
-      (*editor.selectionEnd).y = std::clamp((*editor.selectionEnd).y, editor.viewportMinScreenPos.y,
-                                            editor.viewportMaxScreenPos.y);
-
-      drawList->AddRect(*editor.selectionStart, *editor.selectionEnd,
-                        ImGui::GetColorU32(IM_COL32(0, 130, 216, 255)));  // Border
-      drawList->AddRectFilled(*editor.selectionStart, *editor.selectionEnd,
-                              ImGui::GetColorU32(IM_COL32(0, 130, 216, 50)));  // Background
-    }
-    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && editor.selectionStart.has_value()
-        && editor.selectionEnd.has_value()) {
-      // init selection box here for selection compute later
-      editor.selectionBox = SelectionRegion{};
-      glm::uvec2 mi{zs::min((*editor.selectionStart).x, (*editor.selectionEnd).x),
-                    zs::min((*editor.selectionStart).y, (*editor.selectionEnd).y)},
-          ma{1 + zs::max((*editor.selectionStart).x, (*editor.selectionEnd).x),
-             1 + zs::max((*editor.selectionStart).y, (*editor.selectionEnd).y)};
-      (*editor.selectionBox).extent = ma - mi;
-      (*editor.selectionBox).offset
-          = mi - glm::uvec2{editor.viewportMinScreenPos.x, editor.viewportMinScreenPos.y};
-
-      editor.selectionStart = editor.selectionEnd = {};
-    }
-
-    ImGui::SetCursorScreenPos(editor.viewportMinScreenPos);
-  }
-
-  /// paint
-  void SceneEditor::SceneEditorPaintMode::paint() {
-    ImDrawList *drawList = ImGui::GetWindowDrawList();
-    drawList->ChannelsSetCurrent(_interaction);
-
-    /// selection
-    if (editor.sceneHovered) {
-      editor.paintRadius
-          += ImGui::GetIO().MouseWheel * (ImGui::IsKeyDown(ImGuiKey_LeftShift) ? 5.f : 1.f);
-      if (editor.paintRadius <= 1.f + detail::deduce_numeric_epsilon<float>() * 10)
-
-        ImGui::SetMouseCursor(ImGuiMouseCursor_None);
-      if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-        editor.paintCenter = glm::uvec2{ImGui::GetMousePos().x - editor.viewportMinScreenPos.x,
-                                        ImGui::GetMousePos().y - editor.viewportMinScreenPos.y};
-        drawList->AddCircle(ImGui::GetMousePos(), editor.paintRadius, IM_COL32_WHITE, 0, 2.f);
-      } else {
-        drawList->AddCircle(ImGui::GetMousePos(), editor.paintRadius, IM_COL32_WHITE, 0, 1.f);
-      }
-    }
-  }
-
   ///
   /// final widget
   ///
@@ -314,47 +254,6 @@ namespace zs {
     if (!_widget) _widget = std::make_shared<SceneEditorWidgetComponent>(this);
     // fmt::print("\n\n\ncurrent scene editor widget addr: {}\n\n\n", (void *)_widget.get());
     return _widget;
-  }
-
-  void SceneEditor::SceneEditorInputMode::turnTo(input_mode_e newMode, SceneEditor &editor) {
-    _index = newMode;
-    switch (newMode) {
-      case input_mode_e::_roaming:
-        _modes = Owner<SceneEditorRoamingMode>{editor};
-        break;
-      case input_mode_e::_select:
-        _modes = Owner<SceneEditorSelectionMode>{editor};
-        break;
-      case input_mode_e::_paint:
-        _modes = Owner<SceneEditorPaintMode>{editor};
-        break;
-      default:
-        _modes = std::monostate{};
-    }
-  }
-  const char *SceneEditor::SceneEditorInputMode::getModeInfo(input_mode_e id) const {
-    switch (id) {
-      case input_mode_e::_roaming:
-        return (const char *)u8"漫游";
-      case input_mode_e::_select:
-        return (const char *)u8"编辑";
-      case input_mode_e::_paint:
-        return (const char *)u8"笔刷";
-      default:
-        return (const char *)u8"观察";
-    }
-  }
-  const char *SceneEditor::SceneEditorInputMode::getIconText(input_mode_e id) const {
-    switch (id) {
-      case input_mode_e::_roaming:
-        return ICON_MD_PAGEVIEW;
-      case input_mode_e::_select:
-        return ICON_MD_SELECT_ALL;
-      case input_mode_e::_paint:
-        return ICON_MD_BRUSH;
-      default:
-        return ICON_MD_PHOTO;
-    }
   }
 
 }  // namespace zs

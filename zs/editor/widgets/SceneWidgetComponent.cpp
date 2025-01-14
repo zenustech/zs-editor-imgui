@@ -18,6 +18,112 @@
 
 namespace zs {
 
+  void SceneEditorRoamingMode::paint() {}
+
+  void SceneEditorSelectionMode::paint() {
+    ImDrawList *drawList = ImGui::GetWindowDrawList();
+    drawList->ChannelsSetCurrent(_interaction);
+
+    /// selection
+    if (editor.sceneClicked) editor.selectionStart = ImGui::GetMousePos();
+    if (editor.selectionStart.has_value() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+      // if (ImGui::IsItemHovered()) selectionEnd = ImGui::GetMousePos();
+      editor.selectionEnd = ImGui::GetMousePos();
+      (*editor.selectionEnd).x = std::clamp((*editor.selectionEnd).x, editor.canvasMinCursorPos.x,
+                                            editor.canvasMaxCursorPos.x);
+      (*editor.selectionEnd).y = std::clamp((*editor.selectionEnd).y, editor.canvasMinCursorPos.y,
+                                            editor.canvasMaxCursorPos.y);
+
+      drawList->AddRect(*editor.selectionStart, *editor.selectionEnd,
+                        ImGui::GetColorU32(IM_COL32(0, 130, 216, 255)));  // Border
+      drawList->AddRectFilled(*editor.selectionStart, *editor.selectionEnd,
+                              ImGui::GetColorU32(IM_COL32(0, 130, 216, 50)));  // Background
+    }
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && editor.selectionStart.has_value()
+        && editor.selectionEnd.has_value()) {
+      // init selection box here for selection compute later
+      editor.selectionBox = SelectionRegion{};
+      glm::uvec2 mi{zs::min((*editor.selectionStart).x, (*editor.selectionEnd).x),
+                    zs::min((*editor.selectionStart).y, (*editor.selectionEnd).y)},
+          ma{1 + zs::max((*editor.selectionStart).x, (*editor.selectionEnd).x),
+             1 + zs::max((*editor.selectionStart).y, (*editor.selectionEnd).y)};
+      (*editor.selectionBox).extent = ma - mi;
+      (*editor.selectionBox).offset
+          = mi - glm::uvec2{editor.canvasMinCursorPos.x, editor.canvasMinCursorPos.y};
+
+      editor.selectionStart = editor.selectionEnd = {};
+    }
+
+    ImGui::SetCursorScreenPos(editor.canvasMinCursorPos);
+  }
+
+  /// paint
+  void SceneEditorPaintMode::paint() {
+    ImDrawList *drawList = ImGui::GetWindowDrawList();
+    drawList->ChannelsSetCurrent(_interaction);
+
+    /// selection
+    if (editor.sceneHovered) {
+      editor.paintRadius
+          += ImGui::GetIO().MouseWheel * (ImGui::IsKeyDown(ImGuiKey_LeftShift) ? 5.f : 1.f);
+      if (editor.paintRadius <= 1.f + detail::deduce_numeric_epsilon<float>() * 10)
+
+        ImGui::SetMouseCursor(ImGuiMouseCursor_None);
+      if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        editor.paintCenter = glm::uvec2{ImGui::GetMousePos().x - editor.canvasMinCursorPos.x,
+                                        ImGui::GetMousePos().y - editor.canvasMinCursorPos.y};
+        drawList->AddCircle(ImGui::GetMousePos(), editor.paintRadius, IM_COL32_WHITE, 0, 2.f);
+      } else {
+        drawList->AddCircle(ImGui::GetMousePos(), editor.paintRadius, IM_COL32_WHITE, 0, 1.f);
+      }
+    }
+  }
+
+  void SceneEditorInteractionMode ::paint() {
+    match([](std::monostate) {}, [](auto &input) { input.get().paint(); })(_modes);
+  }
+
+  void SceneEditorInteractionMode::turnTo(input_mode_e newMode, SceneEditor &editor) {
+    _index = newMode;
+    switch (newMode) {
+      case input_mode_e::_roaming:
+        _modes = Owner<SceneEditorRoamingMode>{editor};
+        break;
+      case input_mode_e::_select:
+        _modes = Owner<SceneEditorSelectionMode>{editor};
+        break;
+      case input_mode_e::_paint:
+        _modes = Owner<SceneEditorPaintMode>{editor};
+        break;
+      default:
+        _modes = std::monostate{};
+    }
+  }
+  const char *SceneEditorInteractionMode::getModeInfo(input_mode_e id) const {
+    switch (id) {
+      case input_mode_e::_roaming:
+        return (const char *)u8"漫游";
+      case input_mode_e::_select:
+        return (const char *)u8"编辑";
+      case input_mode_e::_paint:
+        return (const char *)u8"笔刷";
+      default:
+        return (const char *)u8"观察";
+    }
+  }
+  const char *SceneEditorInteractionMode::getIconText(input_mode_e id) const {
+    switch (id) {
+      case input_mode_e::_roaming:
+        return ICON_MD_PAGEVIEW;
+      case input_mode_e::_select:
+        return ICON_MD_SELECT_ALL;
+      case input_mode_e::_paint:
+        return ICON_MD_BRUSH;
+      default:
+        return ICON_MD_PHOTO;
+    }
+  }
+
   void SceneEditorWidgetComponent::drawPath() {
     // helper
     auto searchIndex = [](const auto &candidates, const auto &candidate) -> int {
@@ -168,16 +274,16 @@ namespace zs {
       sceneEditor->onVisiblePrimsChanged.emit(sceneEditor->getCurrentScenePrims());
   }
   void SceneEditorWidgetComponent::paint() {
-    auto &inputMode = sceneEditor->inputMode;
+    auto &interactionMode = sceneEditor->interactionMode;
 
     auto &viewportFocused = sceneEditor->viewportFocused;
     auto &viewportHovered = sceneEditor->viewportHovered;
-    auto &viewportMousePos = sceneEditor->viewportMousePos;
+    auto &canvasLocalMousePos = sceneEditor->canvasLocalMousePos;
 
     auto &imguiCanvasSize = sceneEditor->imguiCanvasSize;  // scene
 
-    auto &viewportMinScreenPos = sceneEditor->viewportMinScreenPos;
-    auto &viewportMaxScreenPos = sceneEditor->viewportMaxScreenPos;
+    auto &canvasMinCursorPos = sceneEditor->canvasMinCursorPos;
+    auto &canvasMaxCursorPos = sceneEditor->canvasMaxCursorPos;
 
     auto &primaryScenePanelOffset = sceneEditor->primaryScenePanelOffset;
     auto &secondaryScenePanelOffset = sceneEditor->secondaryScenePanelOffset;
@@ -218,14 +324,13 @@ namespace zs {
     auto &style = ImGui::GetStyle();
 
     ImDrawList *drawList = ImGui::GetWindowDrawList();
-    drawList->ChannelsSplit(
-        SceneEditor::layer_e::_num_layers);  // 0: scene, 1: interaction (selection, ...), 2:
-                                             // overlay config buttons/selectables
+    drawList->ChannelsSplit(layer_e::_num_layers);  // 0: scene, 1: interaction (selection, ...), 2:
+                                                    // overlay config buttons/selectables
 
     bool modeChanged = false;
 
     /// layer 0
-    drawList->ChannelsSetCurrent(SceneEditor::layer_e::_scene);
+    drawList->ChannelsSetCurrent(layer_e::_scene);
 
     ///
     /// bar area
@@ -246,17 +351,17 @@ namespace zs {
     ImGui::PopStyleColor();
 
     ImGuiComboFlags flags = ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_WidthFitPreview;
-    int idx = inputMode.currentMode();
-    std::vector<const char *> items(inputMode.numModes());
-    for (int i = 0; i < inputMode.numModes(); ++i) {
-      items[i] = inputMode.getIconText((SceneEditor::input_mode_e)i);
+    int idx = interactionMode.currentMode();
+    std::vector<const char *> items(interactionMode.numModes());
+    for (int i = 0; i < interactionMode.numModes(); ++i) {
+      items[i] = interactionMode.getIconText((input_mode_e)i);
     }
     if (ImGui::BeginCombo("##mode_selection", items[idx], flags)) {
-      for (int i = 0; i < inputMode.numModes(); ++i) {
+      for (int i = 0; i < interactionMode.numModes(); ++i) {
         const bool selected = i == idx;
         if (ImGui::Selectable(items[i], selected)) {
           idx = i;
-          inputMode.turnTo((SceneEditor::input_mode_e)i, *sceneEditor);
+          interactionMode.turnTo((input_mode_e)i, *sceneEditor);
           modeChanged = true;
         }
         if (selected) ImGui::SetItemDefaultFocus();
@@ -264,13 +369,12 @@ namespace zs {
       ImGui::EndCombo();
     }
     ImGui::SameLine();
-    ImGui::Text(inputMode.getModeInfo((SceneEditor::input_mode_e)idx));
+    ImGui::Text(interactionMode.getModeInfo((input_mode_e)idx));
 
     /// @brief path/address display
     ImGui::SameLine();
     ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
     ImGui::SameLine();
-
     drawPath();
 
     ImGui::EndChild();
@@ -284,15 +388,15 @@ namespace zs {
         (ImU64) reinterpret_cast<VkDescriptorSet *>(&sceneAttachments.renderedSceneColorSet),
         imguiCanvasSize, ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImColor(0, 0, 0, 0));
 
-    viewportMinScreenPos = ImGui::GetItemRectMin();
-    viewportMaxScreenPos = ImGui::GetItemRectMax();
+    canvasMinCursorPos = ImGui::GetItemRectMin();
+    canvasMaxCursorPos = ImGui::GetItemRectMax();
     ImVec2 windowPos_ = ImGui::GetWindowPos();
 
     auto mousePos_ = ImGui::GetMousePos();
-    viewportMousePos = zs::vec<float, 2>{mousePos_.x - viewportMinScreenPos.x,
-                                         mousePos_.y - viewportMinScreenPos.y};
-    viewportMousePos[0] = std::clamp(viewportMousePos[0], 0.f, (float)vkCanvasExtent.width);
-    viewportMousePos[1] = std::clamp(viewportMousePos[1], 0.f, (float)vkCanvasExtent.height);
+    canvasLocalMousePos
+        = zs::vec<float, 2>{mousePos_.x - canvasMinCursorPos.x, mousePos_.y - canvasMinCursorPos.y};
+    canvasLocalMousePos[0] = std::clamp(canvasLocalMousePos[0], 0.f, (float)vkCanvasExtent.width);
+    canvasLocalMousePos[1] = std::clamp(canvasLocalMousePos[1], 0.f, (float)vkCanvasExtent.height);
 
     bool imageHovered = ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNone);
     sceneClicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
@@ -300,7 +404,8 @@ namespace zs {
     // ImGui::EndGroup();
 
     /// guizmo
-    if (auto focusPrim = focusPrimPtr.lock(); enableGuizmo && inputMode.isEditMode() && focusPrim) {
+    if (auto focusPrim = focusPrimPtr.lock();
+        enableGuizmo && interactionMode.isEditMode() && focusPrim) {
       ImGuizmo::SetOrthographic(false);
       ImGuizmo::SetDrawlist();
       ImGuizmo::SetRect(windowPos_.x, windowPos_.y, imguiCanvasSize.x, imguiCanvasSize.y);
@@ -375,9 +480,9 @@ namespace zs {
 
     /// overlay
     {
-      drawList->ChannelsSetCurrent(SceneEditor::layer_e::_config);
+      drawList->ChannelsSetCurrent(layer_e::_config);
 
-      // coord gizmo
+      /// coord gizmo
       const glm::vec4 xAxis{1, 0, 0, 1}, yAxis{0, 1, 0, 1}, zAxis{0, 0, 1, 1};
 
       // view
@@ -386,8 +491,8 @@ namespace zs {
       // proj
       glm::mat4 proj = glm::ortho(-2.f, 2.f, -2.f, 2.f, -2.f, 2.f);
 
-      ImVec2 center{viewportMaxScreenPos.x - style.FramePadding.x * 2 - gizmoSize / 2 - 8,
-                    viewportMinScreenPos.y + style.FramePadding.y * 2 + gizmoSize / 2 + 8};
+      ImVec2 center{canvasMaxCursorPos.x - style.FramePadding.x * 2 - gizmoSize / 2 - 8,
+                    canvasMinCursorPos.y + style.FramePadding.y * 2 + gizmoSize / 2 + 8};
       auto pv = proj * view;
       // draw to screen (not sure why -(neg) is required here)
       glm::vec4 tips[3] = {-pv * xAxis, -pv * yAxis, -pv * zAxis};
@@ -432,32 +537,33 @@ namespace zs {
         }
       }
 
-      // mode selection (top right)
-      int currentSelection = inputMode.currentMode();
+      /// PRIMARY PANEL : mode selection (top right)
+      int currentSelection = interactionMode.currentMode();
       {
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.8f);
         ImGui::SetWindowFontScale(2.f);
 
         // primary options
-        ImVec2 iconCursorPos{viewportMaxScreenPos.x - style.FramePadding.x * 2,
-                             viewportMinScreenPos.y + gizmoSize + 8 + style.FramePadding.y * 2};
+        ImVec2 iconCursorPos{canvasMaxCursorPos.x - style.FramePadding.x * 2,
+                             canvasMinCursorPos.y + gizmoSize + 8 + style.FramePadding.y * 2};
         iconCursorPos += primaryScenePanelOffset;
 
-        auto sz = ImGui::CalcTextSize(inputMode.getIconText((SceneEditor::input_mode_e)0));
+        auto sz = ImGui::CalcTextSize(interactionMode.getIconText((input_mode_e)0));
         ImGui::SetCursorScreenPos(ImVec2{iconCursorPos.x - sz.x, iconCursorPos.y});
+
         ImGui::BeginGroup();
         ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
-        for (int i = 0; i < inputMode.numModes(); ++i) {
-          const char *iconText = inputMode.getIconText((SceneEditor::input_mode_e)i);
+        for (int i = 0; i < interactionMode.numModes(); ++i) {
+          const char *iconText = interactionMode.getIconText((input_mode_e)i);
           auto sz = ImGui::CalcTextSize(iconText);
           if (ImGui::Selectable(iconText, currentSelection == i, 0, sz)) {
             if (!modeChanged) {
-              inputMode.turnTo(static_cast<SceneEditor::input_mode_e>(i), *sceneEditor);
+              interactionMode.turnTo(static_cast<input_mode_e>(i), *sceneEditor);
               modeChanged = true;
             }
           }
           if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip | ImGuiHoveredFlags_DelayNone)) {
-            ImGui::SetTooltip(inputMode.getModeInfo(static_cast<SceneEditor::input_mode_e>(i)));
+            ImGui::SetTooltip(interactionMode.getModeInfo(static_cast<input_mode_e>(i)));
           }
         }
         ImGui::PopStyleVar();
@@ -470,14 +576,14 @@ namespace zs {
           if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
             ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
             auto delta = io.MouseDelta;
-            if (delta.x + ImGui::GetItemRectMax().x > viewportMaxScreenPos.x)
-              delta.x = viewportMaxScreenPos.x - ImGui::GetItemRectMax().x;
-            if (delta.x + ImGui::GetItemRectMin().x < viewportMinScreenPos.x)
-              delta.x = viewportMinScreenPos.x - ImGui::GetItemRectMin().x;
-            if (delta.y + ImGui::GetItemRectMax().y > viewportMaxScreenPos.y)
-              delta.y = viewportMaxScreenPos.y - ImGui::GetItemRectMax().y;
-            if (delta.y + ImGui::GetItemRectMin().y < viewportMinScreenPos.y)
-              delta.y = viewportMinScreenPos.y - ImGui::GetItemRectMin().y;
+            if (delta.x + ImGui::GetItemRectMax().x > canvasMaxCursorPos.x)
+              delta.x = canvasMaxCursorPos.x - ImGui::GetItemRectMax().x;
+            if (delta.x + ImGui::GetItemRectMin().x < canvasMinCursorPos.x)
+              delta.x = canvasMinCursorPos.x - ImGui::GetItemRectMin().x;
+            if (delta.y + ImGui::GetItemRectMax().y > canvasMaxCursorPos.y)
+              delta.y = canvasMaxCursorPos.y - ImGui::GetItemRectMax().y;
+            if (delta.y + ImGui::GetItemRectMin().y < canvasMinCursorPos.y)
+              delta.y = canvasMinCursorPos.y - ImGui::GetItemRectMin().y;
             primaryScenePanelOffset += delta;
 
             drawList->AddRect(ImGui::GetItemRectMin() - style.ItemSpacing / 2,
@@ -495,7 +601,7 @@ namespace zs {
             int numIndexPressed = 0;
             ImGuiKey id;
             int pressedId = 0;
-            for (int i = 0; i < 9 && i < inputMode.numModes(); ++i) {
+            for (int i = 0; i < 9 && i < interactionMode.numModes(); ++i) {
               id = static_cast<ImGuiKey>((int)ImGuiKey_0 + i + 1);
               if (ImGui::IsKeyPressed(id)) {
                 pressedId = i;
@@ -503,28 +609,28 @@ namespace zs {
               }
             }
             if (numIndexPressed == 1) {
-              inputMode.turnTo(static_cast<SceneEditor::input_mode_e>(pressedId), *sceneEditor);
+              interactionMode.turnTo(static_cast<input_mode_e>(pressedId), *sceneEditor);
               modeChanged = true;
             }
           };
         }
         // secondary options
-        currentSelection = inputMode.currentMode();
+        currentSelection = interactionMode.currentMode();
         ;
 
         ImGui::SetWindowFontScale(1.f);
         ImGui::PopStyleVar();
       }
-      // visualization options (top left)
+      /// SECONDARY PANEL : visualization options (top left)
       {
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.8f);
         ImGui::SetWindowFontScale(2.f);
 
         // primary options
-        ImVec2 iconCursorPos{viewportMinScreenPos.x + style.FramePadding.x * 2,
-                             viewportMinScreenPos.y + style.FramePadding.y * 2};
-        auto drawOption = [&iconCursorPos, &imageHovered](const char *label, bool &enable,
-                                                          const char *hint = nullptr) {
+        ImVec2 iconCursorPos{canvasMinCursorPos.x + style.FramePadding.x * 2,
+                             canvasMinCursorPos.y + style.FramePadding.y * 2};
+        auto drawOption = [&iconCursorPos](const char *label, bool &enable,
+                                           const char *hint = nullptr) {
           auto sz = ImGui::CalcTextSize(label);
           if (ImGui::Selectable(label, enable, 0, sz)) {
             enable ^= 1;
@@ -555,14 +661,14 @@ namespace zs {
           if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
             ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
             auto delta = io.MouseDelta;
-            if (delta.x + ImGui::GetItemRectMax().x > viewportMaxScreenPos.x)
-              delta.x = viewportMaxScreenPos.x - ImGui::GetItemRectMax().x;
-            if (delta.x + ImGui::GetItemRectMin().x < viewportMinScreenPos.x)
-              delta.x = viewportMinScreenPos.x - ImGui::GetItemRectMin().x;
-            if (delta.y + ImGui::GetItemRectMax().y > viewportMaxScreenPos.y)
-              delta.y = viewportMaxScreenPos.y - ImGui::GetItemRectMax().y;
-            if (delta.y + ImGui::GetItemRectMin().y < viewportMinScreenPos.y)
-              delta.y = viewportMinScreenPos.y - ImGui::GetItemRectMin().y;
+            if (delta.x + ImGui::GetItemRectMax().x > canvasMaxCursorPos.x)
+              delta.x = canvasMaxCursorPos.x - ImGui::GetItemRectMax().x;
+            if (delta.x + ImGui::GetItemRectMin().x < canvasMinCursorPos.x)
+              delta.x = canvasMinCursorPos.x - ImGui::GetItemRectMin().x;
+            if (delta.y + ImGui::GetItemRectMax().y > canvasMaxCursorPos.y)
+              delta.y = canvasMaxCursorPos.y - ImGui::GetItemRectMax().y;
+            if (delta.y + ImGui::GetItemRectMin().y < canvasMinCursorPos.y)
+              delta.y = canvasMinCursorPos.y - ImGui::GetItemRectMin().y;
             secondaryScenePanelOffset += delta;
 
             drawList->AddRect(ImGui::GetItemRectMin() - style.ItemSpacing / 2,
@@ -588,8 +694,8 @@ namespace zs {
         ImGui::SetWindowFontScale(1.2f);
 
         // primary options
-        ImVec2 iconCursorPos{viewportMinScreenPos.x + style.FramePadding.x * 2,
-                             viewportMaxScreenPos.y - style.FramePadding.y * 2};
+        ImVec2 iconCursorPos{canvasMinCursorPos.x + style.FramePadding.x * 2,
+                             canvasMaxCursorPos.y - style.FramePadding.y * 2};
         auto drawInfo = [&iconCursorPos, &style](const char *label) {
           auto sz = ImGui::CalcTextSize(label);
           iconCursorPos.y -= sz.y + style.ItemSpacing.y;
@@ -609,11 +715,11 @@ namespace zs {
       // header (top middle)
       {
         ImGui::SetWindowFontScale(1.5f);
-        auto iconCursorPos = ImVec2{(viewportMaxScreenPos.x + viewportMinScreenPos.x) / 2,
-                                    viewportMinScreenPos.y + style.FramePadding.y * 2};
-        auto msg = fmt::format(
-            fmt::runtime((const char *)u8"模式: {}\n"),
-            inputMode.getModeInfo(static_cast<SceneEditor::input_mode_e>(currentSelection)));
+        auto iconCursorPos = ImVec2{(canvasMaxCursorPos.x + canvasMinCursorPos.x) / 2,
+                                    canvasMinCursorPos.y + style.FramePadding.y * 2};
+        auto msg
+            = fmt::format(fmt::runtime((const char *)u8"模式: {}\n"),
+                          interactionMode.getModeInfo(static_cast<input_mode_e>(currentSelection)));
         auto sz = ImGui::CalcTextSize(msg.c_str()).x;
         drawList->AddText(iconCursorPos - ImVec2{sz / 2, 0}, IM_COL32_WHITE, msg.c_str());
         ImGui::SetWindowFontScale(1.f);
@@ -622,9 +728,9 @@ namespace zs {
       // text overlay (bottom right)
       {
         ImGui::SetWindowFontScale(1.2f);
-        auto msg
-            = fmt::format("viewport mouse pos: {}, {}\n", viewportMousePos[0], viewportMousePos[1]);
-        auto iconCursorPos = viewportMaxScreenPos - style.FramePadding * 2;
+        auto msg = fmt::format("viewport mouse pos: {}, {}\n", canvasLocalMousePos[0],
+                               canvasLocalMousePos[1]);
+        auto iconCursorPos = canvasMaxCursorPos - style.FramePadding * 2;
         drawList->AddText(iconCursorPos - ImGui::CalcTextSize(msg.c_str()), IM_COL32_WHITE,
                           msg.c_str());
 
@@ -648,7 +754,7 @@ namespace zs {
 
     /// upper layers
     sceneEditor->sceneHovered = imageHovered;
-    inputMode.paint();
+    interactionMode.paint();
 
     drawList->ChannelsMerge();
   }

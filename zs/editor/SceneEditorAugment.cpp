@@ -1,8 +1,8 @@
 #include "SceneEditor.hpp"
 #include "fonts/stb_font_consolas_24_latin1.inl"
 #include "imgui.h"
-#include "world/system/ZsExecSystem.hpp"
 #include "world/scene/PrimitiveQuery.hpp"
+#include "world/system/ZsExecSystem.hpp"
 
 #define TEXTOVERLAY_MAX_CHAR_COUNT 50000
 static stb_fontchar g_stbFontData[STB_FONT_consolas_24_latin1_NUM_CHARS];
@@ -636,8 +636,7 @@ void main() {
                               sceneAugmentRenderer.genTextPipeline.get());
 
           genTextParams.limit = TEXTOVERLAY_MAX_CHAR_COUNT;
-          genTextParams.extent
-              = glm::ivec2{(int)vkCanvasExtent.width, (int)vkCanvasExtent.height};
+          genTextParams.extent = glm::ivec2{(int)vkCanvasExtent.width, (int)vkCanvasExtent.height};
           genTextParams.ids
               // = glm::ivec2{focusObjId, sceneRenderData.models[focusObjId].verts.vertexCount};
               = glm::ivec2{focusPrim->id(), /*focusPrim->vkTriMesh(ctx)*/ model.verts.vertexCount};
@@ -667,7 +666,7 @@ void main() {
     }
 
     if (viewportHovered) {
-      if (inputMode.isPaintMode()) {
+      if (interactionMode.isPaintMode()) {
 #if ENABLE_PROFILE
         timer.tick();
 #endif
@@ -691,7 +690,7 @@ void main() {
           extent = extent - paintParams.offset + glm::uvec2(1, 1);
           paintParams.radius = radius;
         } else {
-          paintParams.center = glm::ivec2(viewportMousePos[0], viewportMousePos[1]);
+          paintParams.center = glm::ivec2(canvasLocalMousePos[0], canvasLocalMousePos[1]);
           paintParams.offset = paintParams.center;
           extent = glm::uvec2(1, 1);
           paintParams.radius = 0;
@@ -798,7 +797,7 @@ void main() {
           selectionParams.offset = (*selectionBox).offset;
           extent = (*selectionBox).extent;
         } else {
-          selectionParams.offset = glm::ivec2(viewportMousePos[0], viewportMousePos[1]);
+          selectionParams.offset = glm::ivec2(canvasLocalMousePos[0], canvasLocalMousePos[1]);
           extent = glm::uvec2(1, 1);
         }
         selectionParams.extent = extent;
@@ -849,7 +848,6 @@ void main() {
             ;
           }
         }
-
 
         sceneAugmentRenderer.counterBuffer.get().unmap();
 
@@ -979,14 +977,14 @@ void main() {
 #else
       (*cmd).beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
 
-      auto viewport = vk::Viewport()
-                          .setX(0 /*offsetx*/)
-                          .setY(vkCanvasExtent.height /*-offsety*/)
-                          .setWidth(float(vkCanvasExtent.width))
-                          .setHeight(-float(
-                              vkCanvasExtent.height))  // negative viewport, opengl conformant
-                          .setMinDepth(0.0f)
-                          .setMaxDepth(1.0f);
+      auto viewport
+          = vk::Viewport()
+                .setX(0 /*offsetx*/)
+                .setY(vkCanvasExtent.height /*-offsety*/)
+                .setWidth(float(vkCanvasExtent.width))
+                .setHeight(-float(vkCanvasExtent.height))  // negative viewport, opengl conformant
+                .setMinDepth(0.0f)
+                .setMaxDepth(1.0f);
 
       (*cmd).setViewport(0, {viewport});
       (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});

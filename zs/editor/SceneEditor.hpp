@@ -83,8 +83,6 @@ namespace zs {
   ActionWidgetComponent get_widget(Camera &camera, void * = nullptr);
 
   struct SceneEditor {
-    enum layer_e { _scene = 0, _interaction, _config, _num_layers };
-
     SceneEditor() = default;
     void setup(VulkanContext &ctx, ImguiVkRenderer &renderer);
 
@@ -105,45 +103,8 @@ namespace zs {
 
     /// resources
 
-    enum input_mode_e { _still = 0, _roaming, _select, _paint, _num_modes };
-    struct SceneEditorRoamingMode {
-      SceneEditorRoamingMode(SceneEditor &editor) : editor{editor} {}
-      void paint();
-      SceneEditor &editor;
-    };
-    struct SceneEditorSelectionMode {
-      SceneEditorSelectionMode(SceneEditor &editor) : editor{editor} {}
-      void paint();
-      SceneEditor &editor;
-    };
-    struct SceneEditorPaintMode {
-      SceneEditorPaintMode(SceneEditor &editor) : editor{editor} {}
-      void paint();
-      SceneEditor &editor;
-    };
-
-    struct SceneEditorInputMode {
-      void paint() {
-        match([](std::monostate) {}, [](auto &input) { input.get().paint(); })(_modes);
-      }
-      void turnTo(input_mode_e newMode, SceneEditor &editor);
-      int numModes() const { return (int)_num_modes; }
-      int currentMode() const { return (int)_index; }
-      const char *getModeInfo(input_mode_e id) const;
-      const char *getIconText(input_mode_e id) const;
-      bool isPaintMode() const noexcept { return _index == input_mode_e::_paint; }
-      bool isEditMode() const noexcept {
-        return _index == input_mode_e::_select || _index == input_mode_e::_paint;
-      }
-
-      input_mode_e _index{_still};
-      variant<std::monostate, Owner<SceneEditorRoamingMode>, Owner<SceneEditorSelectionMode>,
-              Owner<SceneEditorPaintMode>>
-          _modes;
-    };
-
     inline static auto sampleBits = vk::SampleCountFlagBits::e4;
-    inline static auto colorFormat = vk::Format::eB8G8R8A8Srgb; // vk::Format::eR8G8B8A8Unorm;
+    inline static auto colorFormat = vk::Format::eB8G8R8A8Srgb;  // vk::Format::eR8G8B8A8Unorm;
     inline static auto depthFormat = vk::Format::eD32Sfloat;
     // inline static auto depthFormat = vk::Format::eD16Unorm;
     inline static auto pickFormat = vk::Format::eR32G32B32A32Sint;
@@ -158,7 +119,7 @@ namespace zs {
     bool viewportFocused{false}, viewportHovered{false};
     /// @note different from viewportHovered, mouse might hover overlaying widgets
     bool sceneHovered, sceneClicked;
-    ImVec2 viewportMinScreenPos, viewportMaxScreenPos, imguiCanvasSize;
+    ImVec2 canvasMinCursorPos, canvasMaxCursorPos, imguiCanvasSize;
     bool guizmoUseSnap{true};
     float scaleSnap{0.1f}, rotSnap{10.f}, transSnap{0.1f};
     bool enableGuizmoScale{true}, enableGuizmoRot{true}, enableGuizmoTrans{true};
@@ -175,7 +136,7 @@ namespace zs {
     glm::vec3 paintColor{0.8f, 0.1f, 0.1f};
     float paintRadius = 10.f;
 
-    zs::vec<float, 2> viewportMousePos;
+    zs::vec<float, 2> canvasLocalMousePos;
 
     glm::vec3 getScreenPointCameraRayDirection() const;
     glm::vec3 getCameraPosition() const noexcept { return -sceneRenderData.camera.get().position; }
@@ -184,7 +145,7 @@ namespace zs {
     float framePerSecond = 0.0f;
 
     // [deprecated]
-    SceneEditorInputMode inputMode;
+    SceneEditorInteractionMode interactionMode;
     //
     // SceneEditorWidgetComponent _widget;
     CameraControl _camCtrl;
@@ -193,9 +154,7 @@ namespace zs {
         ignoreDepthTest{false}, showNormal{true}, showOutline{true}, drawTexture{false};
     enum draw_pipeline_e : u32 { draw_Color = 0, draw_Texture, num_DrawPipelines };
     int drawPipeline{draw_Color};  // color, texture
-    struct SelectionRegion {
-      glm::uvec2 offset, extent;
-    };
+
     std::optional<SelectionRegion> selectionBox;
     std::vector<glm::uvec2> selectedIndices;
 
@@ -500,8 +459,8 @@ namespace zs {
     } sceneOITRenderer;
 
     struct SceneLightInfo {
-      glm::vec4 sphere; // xyz: world space position, w: radius
-      glm::vec4 color; // rgb: color, a: intensity
+      glm::vec4 sphere;  // xyz: world space position, w: radius
+      glm::vec4 color;   // rgb: color, a: intensity
     };
 
     struct SceneLighting {

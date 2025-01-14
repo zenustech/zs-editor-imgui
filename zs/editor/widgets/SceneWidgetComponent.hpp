@@ -1,21 +1,64 @@
 #pragma once
+#include "glm/glm.hpp"
 #include "zensim/types/ImplPattern.hpp"
+#include "zensim/types/Polymorphism.h"
 #include "zensim/ui/Widget.hpp"
 
 namespace zs {
 
   struct SceneEditor;
 
+  enum input_mode_e { _still = 0, _roaming, _select, _paint, _num_modes };
+  enum layer_e { _scene = 0, _interaction, _config, _num_layers };
+  struct SelectionRegion {
+    glm::uvec2 offset, extent;
+  };
+
+  struct SceneEditorRoamingMode {
+    SceneEditorRoamingMode(SceneEditor &editor) : editor{editor} {}
+    void paint();
+    SceneEditor &editor;
+  };
+  struct SceneEditorSelectionMode {
+    SceneEditorSelectionMode(SceneEditor &editor) : editor{editor} {}
+    void paint();
+    SceneEditor &editor;
+  };
+  struct SceneEditorPaintMode {
+    SceneEditorPaintMode(SceneEditor &editor) : editor{editor} {}
+    void paint();
+    SceneEditor &editor;
+  };
+
+  struct SceneEditorInteractionMode {
+    void paint();
+    void turnTo(input_mode_e newMode, SceneEditor &editor);
+    int numModes() const { return (int)_num_modes; }
+    int currentMode() const { return (int)_index; }
+    const char *getModeInfo(input_mode_e id) const;
+    const char *getIconText(input_mode_e id) const;
+    bool isPaintMode() const noexcept { return _index == input_mode_e::_paint; }
+    bool isEditMode() const noexcept {
+      return _index == input_mode_e::_select || _index == input_mode_e::_paint;
+    }
+
+    input_mode_e _index{_still};
+    variant<std::monostate, Owner<SceneEditorRoamingMode>, Owner<SceneEditorSelectionMode>,
+            Owner<SceneEditorPaintMode>>
+        _modes;
+  };
+
   struct SceneEditorWidgetComponent : WidgetConcept {
-    SceneEditorWidgetComponent(SceneEditor* s) noexcept : sceneEditor{s} {}
+    SceneEditorWidgetComponent(SceneEditor *s) noexcept : sceneEditor{s} {}
     ~SceneEditorWidgetComponent() override = default;
 
     void paint() override;
+
     void drawPath();
 
-    bool onEvent(GuiEvent* e) override;
+    bool onEvent(GuiEvent *e) override;
 
-    SceneEditor* sceneEditor;
+    SceneEditor *sceneEditor;
   };
 
 }  // namespace zs

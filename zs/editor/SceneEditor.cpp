@@ -562,12 +562,12 @@ void main()
   void SceneEditor::setup(VulkanContext &ctx, ImguiVkRenderer &renderer) {
     guiRenderer = &renderer;
 
-    // inputMode = SceneEditorRoamingMode{*this};
-    inputMode.turnTo(_roaming, *this);
+    // interactionMode = SceneEditorRoamingMode{*this};
+    interactionMode.turnTo(_roaming, *this);
     // imgui
     guizmoUseSnap = true;
     viewportFocused = viewportHovered = false;
-    viewportMousePos = zs::vec<float, 2>::zeros();
+    canvasLocalMousePos = zs::vec<float, 2>::zeros();
     vkCanvasExtent.width = 1280;
     vkCanvasExtent.height = 720;
     focusPrimPtr = {}, hoveredPrimPtr = {};
@@ -627,10 +627,12 @@ void main()
     initialRenderSetup();
 
     /// shaders
-    sceneRenderer.vertShader = ctx.createShaderModuleFromGlsl(
-      g_mesh_pbr_vert_code/*g_mesh_vert_code*/, vk::ShaderStageFlagBits::eVertex, "default_mesh_vert");
-    sceneRenderer.fragShader = ctx.createShaderModuleFromGlsl(
-      g_mesh_pbr_frag_code/*g_mesh_frag_code*/, vk::ShaderStageFlagBits::eFragment, "default_mesh_frag");
+    sceneRenderer.vertShader
+        = ctx.createShaderModuleFromGlsl(g_mesh_pbr_vert_code /*g_mesh_vert_code*/,
+                                         vk::ShaderStageFlagBits::eVertex, "default_mesh_vert");
+    sceneRenderer.fragShader
+        = ctx.createShaderModuleFromGlsl(g_mesh_pbr_frag_code /*g_mesh_frag_code*/,
+                                         vk::ShaderStageFlagBits::eFragment, "default_mesh_frag");
     ctx.acquireSet(sceneRenderer.fragShader.get().layout(1), sceneLighting.lightTableSet);
 
     // texture
@@ -698,40 +700,41 @@ void main()
     auto rpBuilder = ctx.renderpass().setNumPasses(1);
     if (sampleBits != vk::SampleCountFlagBits::e1) {
       rpBuilder
-        // 0
-        .addAttachment(colorFormat, vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eColorAttachmentOptimal, true, sampleBits)
-        // 1
-        .addAttachment(depthFormat, vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eDepthStencilAttachmentOptimal, true, sampleBits)
-        // 2
-        .addAttachment(colorFormat, vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eShaderReadOnlyOptimal, false, vk::SampleCountFlagBits::e1)
-        // 3
-        .addAttachment(depthFormat, vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eShaderReadOnlyOptimal,  // used as input attachment
-        false, vk::SampleCountFlagBits::e1)
-        // 4
-        .addAttachment(pickFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, true,
-        sampleBits)
-        // 5
-        .addAttachment(pickFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, false,
-        vk::SampleCountFlagBits::e1)
-        .addSubpass({ 0, 4 }, /*depthStencilRef*/ 1, /*colorResolveRef*/{ 2, 5 },
-        /*depthStencilResolveRef*/ 3, /*inputAttachments*/{});
+          // 0
+          .addAttachment(colorFormat, vk::ImageLayout::eUndefined,
+                         vk::ImageLayout::eColorAttachmentOptimal, true, sampleBits)
+          // 1
+          .addAttachment(depthFormat, vk::ImageLayout::eUndefined,
+                         vk::ImageLayout::eDepthStencilAttachmentOptimal, true, sampleBits)
+          // 2
+          .addAttachment(colorFormat, vk::ImageLayout::eUndefined,
+                         vk::ImageLayout::eShaderReadOnlyOptimal, false,
+                         vk::SampleCountFlagBits::e1)
+          // 3
+          .addAttachment(depthFormat, vk::ImageLayout::eUndefined,
+                         vk::ImageLayout::eShaderReadOnlyOptimal,  // used as input attachment
+                         false, vk::SampleCountFlagBits::e1)
+          // 4
+          .addAttachment(pickFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, true,
+                         sampleBits)
+          // 5
+          .addAttachment(pickFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, false,
+                         vk::SampleCountFlagBits::e1)
+          .addSubpass({0, 4}, /*depthStencilRef*/ 1, /*colorResolveRef*/ {2, 5},
+                      /*depthStencilResolveRef*/ 3, /*inputAttachments*/ {});
     } else {
       rpBuilder
-        // color
-        .addAttachment(colorFormat, vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eShaderReadOnlyOptimal, true, vk::SampleCountFlagBits::e1)
-        // depth
-        .addAttachment(depthFormat, vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eShaderReadOnlyOptimal, true, vk::SampleCountFlagBits::e1)
-        // pick
-        .addAttachment(pickFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, true,
-        vk::SampleCountFlagBits::e1)
-        .addSubpass({ 0, 2 }, /*depthStencilRef*/ 1, /*colorResolveRef*/{},
-        /*depthStencilResolveRef*/ -1, /*inputAttachments*/{});
+          // color
+          .addAttachment(colorFormat, vk::ImageLayout::eUndefined,
+                         vk::ImageLayout::eShaderReadOnlyOptimal, true, vk::SampleCountFlagBits::e1)
+          // depth
+          .addAttachment(depthFormat, vk::ImageLayout::eUndefined,
+                         vk::ImageLayout::eShaderReadOnlyOptimal, true, vk::SampleCountFlagBits::e1)
+          // pick
+          .addAttachment(pickFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral, true,
+                         vk::SampleCountFlagBits::e1)
+          .addSubpass({0, 2}, /*depthStencilRef*/ 1, /*colorResolveRef*/ {},
+                      /*depthStencilResolveRef*/ -1, /*inputAttachments*/ {});
     }
     sceneRenderer.renderPass = rpBuilder.build();
 
@@ -754,11 +757,12 @@ void main()
         .setBlendEnable(false)
         .setDepthCompareOp(SceneEditor::reversedZ ? vk::CompareOp::eGreaterOrEqual
                                                   : vk::CompareOp::eLessOrEqual)
-        .setPushConstantRanges({
-          vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4)},
-          vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, sizeof(glm::mat4), sizeof(i32)},
-          vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, sizeof(glm::mat4) + 2 * sizeof(i32), sizeof(glm::ivec2)}
-        })
+        .setPushConstantRanges(
+            {vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4)},
+             vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, sizeof(glm::mat4),
+                                   sizeof(i32)},
+             vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment,
+                                   sizeof(glm::mat4) + 2 * sizeof(i32), sizeof(glm::ivec2)}})
         .setBindingDescriptions(VkModel::get_binding_descriptions_normal_color(VkModel::tri))
         .setAttributeDescriptions(VkModel::get_attribute_descriptions_normal_color(VkModel::tri));
     sceneRenderer.opaquePipeline = pipelineBuilder.build();
@@ -964,7 +968,7 @@ void main()
     // conf.setString("srcPath", "E:/home_usd/result/start.usd");
     conf.setString("srcPath", "E:/Kitchen_set/Kitchen_set.usd");
 
-    auto& cam = sceneRenderData.camera.get();
+    auto &cam = sceneRenderData.camera.get();
     cam.position = glm::vec3(-154.649, -138.206, -291.733);
     cam.rotation = glm::vec3(-39.5, -1.4, 0.0);
     cam.updateViewMatrix();
@@ -1244,7 +1248,7 @@ void main()
 #  endif
 #endif  // ENABLE_OCCLUSION_QUERY
 
-    if (inputMode.isEditMode()) {
+    if (interactionMode.isEditMode()) {
 #if ENABLE_PROFILE
       timer.tick();
 #endif
@@ -1674,11 +1678,12 @@ void main()
                                     /*descriptor sets*/ {sceneRenderData.sceneCameraSet, texSet},
                                     /*dynamic offset*/ {0}, ctx.dispatcher);
 #  else
-          (*cmd).bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                    /*pipeline layout*/ sceneRenderer.opaquePipeline.get(),
-                                    /*firstSet*/ 0,
-                                    /*descriptor sets*/ {sceneRenderData.sceneCameraSet, sceneLighting.lightTableSet},
-                                    /*dynamic offset*/ {0}, ctx.dispatcher);
+          (*cmd).bindDescriptorSets(
+              vk::PipelineBindPoint::eGraphics,
+              /*pipeline layout*/ sceneRenderer.opaquePipeline.get(),
+              /*firstSet*/ 0,
+              /*descriptor sets*/ {sceneRenderData.sceneCameraSet, sceneLighting.lightTableSet},
+              /*dynamic offset*/ {0}, ctx.dispatcher);
 #  endif
 
           (*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics, sceneRenderer.opaquePipeline.get());
@@ -1696,11 +1701,11 @@ void main()
           (*cmd).pushConstants(sceneRenderer.opaquePipeline.get(),
                                vk::ShaderStageFlagBits::eFragment, sizeof(transform), sizeof(id),
                                &id);
-          const glm::ivec2 clusterCountVec = { sceneLighting.clusterCountPerLine, sceneLighting.clusterCountPerDepth };
+          const glm::ivec2 clusterCountVec
+              = {sceneLighting.clusterCountPerLine, sceneLighting.clusterCountPerDepth};
           (*cmd).pushConstants(
-            sceneRenderer.opaquePipeline.get(), vk::ShaderStageFlagBits::eFragment,
-            sizeof(transform) + 2 * sizeof(id), sizeof(glm::ivec2), &clusterCountVec
-          );
+              sceneRenderer.opaquePipeline.get(), vk::ShaderStageFlagBits::eFragment,
+              sizeof(transform) + 2 * sizeof(id), sizeof(glm::ivec2), &clusterCountVec);
           model.bindNormalColor((*cmd), VkModel::tri);
           model.drawNormalColor((*cmd), VkModel::tri);
         } else {
@@ -1874,7 +1879,7 @@ void main()
   void SceneEditor::update(float dt) {
     /// handle input events
     // if (viewportFocused) {
-    //   inputMode.update(dt);
+    //   interactionMode.update(dt);
     // }
 
     _camCtrl.update(dt);
@@ -1934,7 +1939,7 @@ void main()
 
   glm::vec3 SceneEditor::getScreenPointCameraRayDirection() const {
     return sceneRenderData.camera.get().getCameraRayDirection(
-        viewportMousePos[0], viewportMousePos[1], (float)vkCanvasExtent.width,
+        canvasLocalMousePos[0], canvasLocalMousePos[1], (float)vkCanvasExtent.width,
         (float)vkCanvasExtent.height);
   }
 
