@@ -1,5 +1,7 @@
 #pragma once
 #include "glm/glm.hpp"
+#include "imgui.h"
+#include "world/async/StateMachine.hpp"
 #include "zensim/types/ImplPattern.hpp"
 #include "zensim/types/Polymorphism.h"
 #include "zensim/ui/Widget.hpp"
@@ -22,6 +24,11 @@ namespace zs {
   struct SceneEditorSelectionMode {
     SceneEditorSelectionMode(SceneEditor &editor) : editor{editor} {}
     void paint();
+
+    void onEvent(GuiEvent *e) { _selectOperation.onEvent(e); }
+
+    ImVec2 selectionStart, selectionEnd;
+    StateMachine _selectOperation;
     SceneEditor &editor;
   };
   struct SceneEditorPaintMode {
@@ -40,6 +47,12 @@ namespace zs {
     bool isPaintMode() const noexcept { return _index == input_mode_e::_paint; }
     bool isEditMode() const noexcept {
       return _index == input_mode_e::_select || _index == input_mode_e::_paint;
+    }
+
+    void onEvent(GuiEvent *e) {
+      return match(
+          [](...) {},
+          [e = FWD(e)](auto &mode) -> decltype((void)mode.onEvent(e)) { mode.onEvent(e); })(_modes);
     }
 
     input_mode_e _index{_still};

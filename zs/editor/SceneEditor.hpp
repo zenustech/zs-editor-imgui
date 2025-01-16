@@ -118,7 +118,7 @@ namespace zs {
     ///
     bool viewportFocused{false}, viewportHovered{false};
     /// @note different from viewportHovered, mouse might hover overlaying widgets
-    bool sceneHovered, sceneClicked;
+    bool sceneHovered;
     ImVec2 canvasMinCursorPos, canvasMaxCursorPos, imguiCanvasSize;
     bool guizmoUseSnap{true};
     float scaleSnap{0.1f}, rotSnap{10.f}, transSnap{0.1f};
@@ -130,7 +130,10 @@ namespace zs {
 
     float gizmoSize{100.f};
 
+    // * selection
+    bool sceneClicked;
     std::optional<ImVec2> selectionStart{}, selectionEnd{};
+    // * selection
 
     std::optional<glm::uvec2> paintCenter{};
     glm::vec3 paintColor{0.8f, 0.1f, 0.1f};
@@ -475,6 +478,8 @@ namespace zs {
       std::vector<SceneLightInfo> lightList;
       size_t clusterCountPerLine;
       size_t clusterCountPerDepth;
+
+      Owner<Buffer> clusterDimUbo;  // glm::vec2i
       size_t clusterCount;
 
       static const size_t CLUSTER_SCREEN_SIZE = 32;

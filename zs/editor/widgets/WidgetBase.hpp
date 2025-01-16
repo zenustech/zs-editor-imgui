@@ -269,28 +269,28 @@ namespace zs {
       components.emplace_back(
           WidgetNode{zs::make_shared<remove_cvref_t<ChildT>>(FWD(widget)), this});
       components.back().refWidgetPtr()->setZsUserPointer(components.back().refNodePtr());
-      fmt::print("\n\twidget [type: {}, addr: {}] user pointer: {} (ref: {})\n",
-                 get_type_str<ChildT>(), (void *)components.back().refWidgetPtr(),
-                 components.back().refWidgetPtr()->getZsUserPointer(),
-                 (void *)components.back().refNodePtr());
+      // fmt::print("\n\twidget [type: {}, addr: {}] user pointer: {} (ref: {})\n",
+      //            get_type_str<ChildT>(), (void *)components.back().refWidgetPtr(),
+      //            components.back().refWidgetPtr()->getZsUserPointer(),
+      //            (void *)components.back().refNodePtr());
     }
     template <typename ChildT, enable_if_t<is_base_of_v<WidgetConcept, ChildT>> = 0>
     void appendComponent(Shared<ChildT> widget) {
       components.emplace_back(WidgetNode{widget, this});
       components.back().refWidgetPtr()->setZsUserPointer(components.back().refNodePtr());
-      fmt::print("\n\twidget [type: {}, addr: {} (ref: {})] user pointer: {} (ref: {})\n",
-                 get_type_str<ChildT>(), (void *)components.back().refWidgetPtr(),
-                 (void *)widget.get(), components.back().refWidgetPtr()->getZsUserPointer(),
-                 (void *)components.back().refNodePtr());
+      // fmt::print("\n\twidget [type: {}, addr: {} (ref: {})] user pointer: {} (ref: {})\n",
+      //            get_type_str<ChildT>(), (void *)components.back().refWidgetPtr(),
+      //            (void *)widget.get(), components.back().refWidgetPtr()->getZsUserPointer(),
+      //            (void *)components.back().refNodePtr());
     }
     template <typename ChildT, enable_if_t<is_base_of_v<WidgetConcept, ChildT>> = 0>
     void appendComponent(ChildT *widget) {
       components.emplace_back(WidgetNode{Shared<ChildT>{widget}, this});
       components.back().refWidgetPtr()->setZsUserPointer(components.back().refNodePtr());
-      fmt::print("\n\twidget [type: {}, addr: {}] user pointer: {} (ref: {})\n",
-                 get_type_str<ChildT>(), (void *)components.back().refWidgetPtr(),
-                 components.back().refWidgetPtr()->getZsUserPointer(),
-                 (void *)components.back().refNodePtr());
+      // fmt::print("\n\twidget [type: {}, addr: {}] user pointer: {} (ref: {})\n",
+      //            get_type_str<ChildT>(), (void *)components.back().refWidgetPtr(),
+      //            components.back().refWidgetPtr()->getZsUserPointer(),
+      //            (void *)components.back().refNodePtr());
     }
 
     void appendChild(WindowWidgetNode &&widget) {
@@ -299,10 +299,10 @@ namespace zs {
       // components.back().widget<WindowWidgetNode>()->setZsUserPointer(
       //     components.back().refWidgetPtr());
       components.back().refWidgetPtr()->setZsUserPointer(components.back().refNodePtr());
-      fmt::print("\n\twidget [type: window, addr: {}] user pointer: {} (ref: {})\n",
-                 (void *)components.back().refWidgetPtr(),
-                 components.back().refWidgetPtr()->getZsUserPointer(),
-                 (void *)components.back().refNodePtr());
+      // fmt::print("\n\twidget [type: window, addr: {}] user pointer: {} (ref: {})\n",
+      //            (void *)components.back().refWidgetPtr(),
+      //            components.back().refWidgetPtr()->getZsUserPointer(),
+      //            (void *)components.back().refNodePtr());
     }
 
     void setMenuComponent(MenuBarWidgetComponent &&w) { menu = zs::move(w); }

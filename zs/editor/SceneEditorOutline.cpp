@@ -247,14 +247,12 @@ void main()
   void SceneEditor::rebuildOutlineFbo() {
     sceneOutlineRenderer.outlineImage
         = ctx().create2DImage(vkCanvasExtent, colorFormat,
-                              /* combined image sampler */ vk::ImageUsageFlagBits::eSampled |
-                                  /* storage image */ vk::ImageUsageFlagBits::eStorage
+                              /* combined image sampler */ vk::ImageUsageFlagBits::eSampled
                                   | vk::ImageUsageFlagBits::eColorAttachment |
                                   /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
     sceneOutlineRenderer.outlineSwapImage
         = ctx().create2DImage(vkCanvasExtent, colorFormat,
-                              /* combined image sampler */ vk::ImageUsageFlagBits::eSampled |
-                                  /* storage image */ vk::ImageUsageFlagBits::eStorage
+                              /* combined image sampler */ vk::ImageUsageFlagBits::eSampled
                                   | vk::ImageUsageFlagBits::eColorAttachment |
                                   /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
 
@@ -302,14 +300,14 @@ void main()
 
       // setup viewport
       {
-        auto viewport = vk::Viewport()
-                            .setX(0 /*offsetx*/)
-                            .setY(vkCanvasExtent.height /*-offsety*/)
-                            .setWidth(float(vkCanvasExtent.width))
-                            .setHeight(-float(
-                                vkCanvasExtent.height))  // negative viewport, opengl conformant
-                            .setMinDepth(0.0f)
-                            .setMaxDepth(1.0f);
+        auto viewport
+            = vk::Viewport()
+                  .setX(0 /*offsetx*/)
+                  .setY(vkCanvasExtent.height /*-offsety*/)
+                  .setWidth(float(vkCanvasExtent.width))
+                  .setHeight(-float(vkCanvasExtent.height))  // negative viewport, opengl conformant
+                  .setMinDepth(0.0f)
+                  .setMaxDepth(1.0f);
         (*cmd).setViewport(0, {viewport});
         (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});
       }
@@ -354,8 +352,7 @@ void main()
           /*dynamic offset*/ {}, ctx.dispatcher);
       (*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics,
                           sceneOutlineRenderer.outlinePipeline.get());
-      glm::vec2 deltaUV
-          = glm::vec2(1.0f / vkCanvasExtent.width, 1.0f / vkCanvasExtent.height);
+      glm::vec2 deltaUV = glm::vec2(1.0f / vkCanvasExtent.width, 1.0f / vkCanvasExtent.height);
       (*cmd).pushConstants(sceneOutlineRenderer.outlinePipeline.get(),
                            vk::ShaderStageFlagBits::eFragment, 0, sizeof(deltaUV), &deltaUV);
       (*cmd).pushConstants(sceneOutlineRenderer.outlinePipeline.get(),
@@ -385,8 +382,7 @@ void main()
           /*dynamic offset*/ {}, ctx.dispatcher);
       (*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics,
                           sceneOutlineRenderer.outlineSwapPipeline.get());
-      glm::vec2 deltaUV
-          = glm::vec2(1.0f / vkCanvasExtent.width, 1.0f / vkCanvasExtent.height);
+      glm::vec2 deltaUV = glm::vec2(1.0f / vkCanvasExtent.width, 1.0f / vkCanvasExtent.height);
       (*cmd).pushConstants(sceneOutlineRenderer.outlineSwapPipeline.get(),
                            vk::ShaderStageFlagBits::eFragment, 0, sizeof(deltaUV), &deltaUV);
       (*cmd).pushConstants(sceneOutlineRenderer.outlineSwapPipeline.get(),
@@ -426,12 +422,10 @@ void main()
 
         float outlineColor[3] = {0.1, 1.0, 0.1};
         _renderOutlineForOneModel(
-          ctx, cmd,
-          /*sceneRenderData.models[focusObjId]*/ /*focusPrim->vkTriMesh(ctx)*/ model,
-          // focusPrim->visualTransform(sceneRenderData.currentTimeCode),
-          focusPrim->currentTimeVisualTransform(),
-          outlineColor
-        );
+            ctx, cmd,
+            /*sceneRenderData.models[focusObjId]*/ /*focusPrim->vkTriMesh(ctx)*/ model,
+            // focusPrim->visualTransform(sceneRenderData.currentTimeCode),
+            focusPrim->currentTimeVisualTransform(), outlineColor);
       }
     }
     if (renderHoveredModel) {
@@ -441,12 +435,10 @@ void main()
 
         float outlineColor[3] = {1.0, 1.0, 0.1};
         _renderOutlineForOneModel(
-          ctx, cmd,
-          /*sceneRenderData.models[hoveredObjId]*/ /*hoveredPrim->vkTriMesh(ctx)*/ model,
-          // hoveredPrim->visualTransform(sceneRenderData.currentTimeCode),
-          hoveredPrim->currentTimeVisualTransform(),
-          outlineColor
-        );
+            ctx, cmd,
+            /*sceneRenderData.models[hoveredObjId]*/ /*hoveredPrim->vkTriMesh(ctx)*/ model,
+            // hoveredPrim->visualTransform(sceneRenderData.currentTimeCode),
+            hoveredPrim->currentTimeVisualTransform(), outlineColor);
       }
     }
 

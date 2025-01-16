@@ -204,8 +204,7 @@ void main()
 
     scenePickPass.postFxVis
         = ctx().create2DImage(vkCanvasExtent, colorFormat,
-                              /* combined image sampler */ vk::ImageUsageFlagBits::eSampled |
-                                  /* storage image */ vk::ImageUsageFlagBits::eStorage
+                              /* combined image sampler */ vk::ImageUsageFlagBits::eSampled
                                   | vk::ImageUsageFlagBits::eColorAttachment);
     scenePickPass.fbo = ctx().createFramebuffer(
         {(vk::ImageView)scenePickPass.pickBuffer.get(),
@@ -288,14 +287,14 @@ void main()
       auto inheritance = vk::CommandBufferInheritanceInfo{scenePickPass.renderPass.get(),
                                                           /*subpass*/ 0, scenePickPass.fbo.get()};
 
-      auto viewport = vk::Viewport()
-                          .setX(0 /*offsetx*/)
-                          .setY(vkCanvasExtent.height /*-offsety*/)
-                          .setWidth(float(vkCanvasExtent.width))
-                          .setHeight(-float(
-                              vkCanvasExtent.height))  // negative viewport, opengl conformant
-                          .setMinDepth(0.0f)
-                          .setMaxDepth(1.0f);
+      auto viewport
+          = vk::Viewport()
+                .setX(0 /*offsetx*/)
+                .setY(vkCanvasExtent.height /*-offsety*/)
+                .setWidth(float(vkCanvasExtent.width))
+                .setHeight(-float(vkCanvasExtent.height))  // negative viewport, opengl conformant
+                .setMinDepth(0.0f)
+                .setMaxDepth(1.0f);
 
       for (auto it = visiblePrimChunks.begin(); it < visiblePrimChunks.end(); ++it, ++j) {
         renderScheduler->enqueue(
@@ -331,9 +330,9 @@ void main()
                 auto pModel = prim->queryVkTriMesh(ctx, sceneRenderData.currentTimeCode);
                 if (!pModel || currentVisiblePrimsDrawn.at(prim) == 0) continue;
                 const auto &model = *pModel;
-            // const auto &model = prim->vkTriMesh(ctx);
+                // const auto &model = prim->vkTriMesh(ctx);
                 // auto transform = prim->visualTransform(sceneRenderData.currentTimeCode);
-                const auto& transform = prim->currentTimeVisualTransform();
+                const auto &transform = prim->currentTimeVisualTransform();
                 (*renderCmd)
                     .pushConstants(scenePickPass.pipeline.get(), vk::ShaderStageFlagBits::eVertex,
                                    0, sizeof(transform), &transform);

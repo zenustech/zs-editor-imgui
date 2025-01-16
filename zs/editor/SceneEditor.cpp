@@ -186,7 +186,7 @@ struct ShadeContext{
 
 layout (push_constant) uniform fragmentPushConstants {
     layout(offset = 16 * 4) int objId;
-    layout(offset = 16 * 4 + 8) ivec2 clusterCountVec; // x: cluster count per line, y: per depth
+    // layout(offset = 16 * 4 + 8) ivec2 clusterCountVec; // x: cluster count per line, y: per depth
 } pushConstant;
 layout (set = 1, binding = 0) readonly buffer LightList {
   LightInfo lights[];
@@ -194,6 +194,9 @@ layout (set = 1, binding = 0) readonly buffer LightList {
 layout (set = 1, binding = 1) readonly buffer ClusterLightIndexInfo {
   int lightIndices[];
 };
+layout (set = 1, binding = 2) uniform LightClusterParam {
+  ivec2 clusterCountVec; // x: cluster count per line, y: per depth
+} lightClusterUbo;
 
 layout (location = 0) out vec4 outFragColor;
 layout (location = 1) out ivec3 outTag;
@@ -207,7 +210,8 @@ const float metallic = 0.1;
 
 int getClusterIndex(){
   ivec3 cid_vec = ivec3(gl_FragCoord.xy / 32, floor(inViewVec.w / 625.0));
-  return int(dot(cid_vec, ivec3(1, pushConstant.clusterCountVec.x, pushConstant.clusterCountVec.y)));
+  // return int(dot(cid_vec, ivec3(1, pushConstant.clusterCountVec.x, pushConstant.clusterCountVec.y)));
+  return int(dot(cid_vec, ivec3(1, lightClusterUbo.clusterCountVec.x, lightClusterUbo.clusterCountVec.y)));
 }
 
 float GGX(float cosine, float k){
@@ -757,12 +761,16 @@ void main()
         .setBlendEnable(false)
         .setDepthCompareOp(SceneEditor::reversedZ ? vk::CompareOp::eGreaterOrEqual
                                                   : vk::CompareOp::eLessOrEqual)
-        .setPushConstantRanges(
-            {vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4)},
-             vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, sizeof(glm::mat4),
-                                   sizeof(i32)},
-             vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment,
-                                   sizeof(glm::mat4) + 2 * sizeof(i32), sizeof(glm::ivec2)}})
+        .setPushConstantRanges({
+            vk::PushConstantRange{vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4)},
+#if 1
+            vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, sizeof(glm::mat4),
+                                  sizeof(i32)},
+#else
+            vk::PushConstantRange{vk::ShaderStageFlagBits::eFragment, sizeof(glm::mat4),
+                                  2 * sizeof(i32) + sizeof(glm::ivec2)}
+#endif
+        })
         .setBindingDescriptions(VkModel::get_binding_descriptions_normal_color(VkModel::tri))
         .setAttributeDescriptions(VkModel::get_attribute_descriptions_normal_color(VkModel::tri));
     sceneRenderer.opaquePipeline = pipelineBuilder.build();
@@ -1106,8 +1114,7 @@ void main()
     // 2
     sceneAttachments.color
         = ctx().create2DImage(vkCanvasExtent, colorFormat,
-                              /* combined image sampler */ vk::ImageUsageFlagBits::eSampled |
-                                  /* storage image */ vk::ImageUsageFlagBits::eStorage
+                              /* combined image sampler */ vk::ImageUsageFlagBits::eSampled
                                   | vk::ImageUsageFlagBits::eColorAttachment |
                                   /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
     // 3
@@ -1683,7 +1690,7 @@ void main()
               /*pipeline layout*/ sceneRenderer.opaquePipeline.get(),
               /*firstSet*/ 0,
               /*descriptor sets*/ {sceneRenderData.sceneCameraSet, sceneLighting.lightTableSet},
-              /*dynamic offset*/ {0}, ctx.dispatcher);
+              /*dynamic offset*/ {0, 0}, ctx.dispatcher);
 #  endif
 
           (*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics, sceneRenderer.opaquePipeline.get());
@@ -1701,11 +1708,13 @@ void main()
           (*cmd).pushConstants(sceneRenderer.opaquePipeline.get(),
                                vk::ShaderStageFlagBits::eFragment, sizeof(transform), sizeof(id),
                                &id);
+#  if 0
           const glm::ivec2 clusterCountVec
               = {sceneLighting.clusterCountPerLine, sceneLighting.clusterCountPerDepth};
           (*cmd).pushConstants(
               sceneRenderer.opaquePipeline.get(), vk::ShaderStageFlagBits::eFragment,
               sizeof(transform) + 2 * sizeof(id), sizeof(glm::ivec2), &clusterCountVec);
+#  endif
           model.bindNormalColor((*cmd), VkModel::tri);
           model.drawNormalColor((*cmd), VkModel::tri);
         } else {

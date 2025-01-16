@@ -28,6 +28,7 @@ out gl_PerVertex
 };
 
 void main(void) {
+  // debugPrintfEXT("gl_VertexIndex = %i", gl_VertexIndex);
   // normal z
 	// gl_Position = vec4(inPos, 0.00001, 1.0);  // depth 0 reserved for selection box
   // reverse-Z

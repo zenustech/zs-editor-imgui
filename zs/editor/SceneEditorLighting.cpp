@@ -1,8 +1,7 @@
 #include "SceneEditor.hpp"
-
 #include "world/scene/Primitive.hpp"
 
-namespace zs{
+namespace zs {
   static const char g_cluster_light[] = R"(
 #version 450
 
@@ -133,25 +132,32 @@ void main() {
   void SceneEditor::setupLightingResources() {
     auto& ctx = this->ctx();
 
-    ResourceSystem::load_shader(ctx, "default_cluster_light.comp", vk::ShaderStageFlagBits::eCompute, g_cluster_light);
+    ResourceSystem::load_shader(ctx, "default_cluster_light.comp",
+                                vk::ShaderStageFlagBits::eCompute, g_cluster_light);
     auto& clusterLightShader = ResourceSystem::get_shader("default_cluster_light.comp");
     ctx.acquireSet(clusterLightShader.layout(0), sceneLighting.clusterLightingSet);
 
     sceneLighting.lightList.reserve(32);
 
-    sceneLighting.clusterLightPipeline = Pipeline{ clusterLightShader, sizeof(glm::mat4) + sizeof(glm::vec4) * 2 + sizeof(glm::ivec3)};
+    sceneLighting.clusterLightPipeline = Pipeline{
+        clusterLightShader, sizeof(glm::mat4) + sizeof(glm::vec4) * 2 + sizeof(glm::ivec3)};
+
+    sceneLighting.clusterDimUbo = ctx.createBuffer(
+        sizeof(glm::ivec2), vk::BufferUsageFlagBits::eUniformBuffer,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eDeviceLocal);
+    sceneLighting.clusterDimUbo.get().map();
 
     rebuildLightingFBO();
   }
 
   void SceneEditor::ensureLightListBuffer() {
-    size_t targetBufferBytes = std::max((size_t)32, sceneLighting.lightList.size()) * sizeof(SceneEditor::SceneLightInfo);
-    if (!sceneLighting.lightInfoBuffer || sceneLighting.lightInfoBuffer.get().getSize() < targetBufferBytes) {
+    size_t targetBufferBytes = std::max((size_t)32, sceneLighting.lightList.size())
+                               * sizeof(SceneEditor::SceneLightInfo);
+    if (!sceneLighting.lightInfoBuffer
+        || sceneLighting.lightInfoBuffer.get().getSize() < targetBufferBytes) {
       sceneLighting.lightInfoBuffer = ctx().createBuffer(
-        targetBufferBytes,
-        vk::BufferUsageFlagBits::eStorageBuffer,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCached
-      );
+          targetBufferBytes, vk::BufferUsageFlagBits::eStorageBuffer,
+          vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCached);
       sceneLighting.lightInfoBuffer.get().map();
     }
   }
@@ -163,45 +169,55 @@ void main() {
     ensureLightListBuffer();
 
     // divide screen width per 32 pixels
-    sceneLighting.clusterCountPerLine = (vkCanvasExtent.width + SceneLighting::CLUSTER_SCREEN_SIZE - 1) / SceneLighting::CLUSTER_SCREEN_SIZE;
+    sceneLighting.clusterCountPerLine
+        = (vkCanvasExtent.width + SceneLighting::CLUSTER_SCREEN_SIZE - 1)
+          / SceneLighting::CLUSTER_SCREEN_SIZE;
     // divide screen height per 32 pixels
-    sceneLighting.clusterCountPerDepth = sceneLighting.clusterCountPerLine * ((vkCanvasExtent.height + SceneLighting::CLUSTER_SCREEN_SIZE - 1) / SceneLighting::CLUSTER_SCREEN_SIZE);
-    sceneLighting.clusterCount = sceneLighting.clusterCountPerDepth * SceneLighting::CLUSTER_Z_SLICE; // divide screen depth into 32 parts
+    sceneLighting.clusterCountPerDepth
+        = sceneLighting.clusterCountPerLine
+          * ((vkCanvasExtent.height + SceneLighting::CLUSTER_SCREEN_SIZE - 1)
+             / SceneLighting::CLUSTER_SCREEN_SIZE);
+
+    {
+      glm::ivec2 tmp{sceneLighting.clusterCountPerLine, sceneLighting.clusterCountPerDepth};
+      std::memcpy(sceneLighting.clusterDimUbo.get().mappedAddress(), &tmp, sizeof(tmp));
+    }
+
+    sceneLighting.clusterCount
+        = sceneLighting.clusterCountPerDepth
+          * SceneLighting::CLUSTER_Z_SLICE;  // divide screen depth into 32 parts
     sceneLighting.clusterLightInfoBuffer = ctx.createBuffer(
-      sceneLighting.clusterCount * SceneLighting::CLUSTER_LIGHT_INDEX_CAPACITY * sizeof(int), // cluster light index list
-      vk::BufferUsageFlagBits::eStorageBuffer,
-      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCached
+        sceneLighting.clusterCount * SceneLighting::CLUSTER_LIGHT_INDEX_CAPACITY
+            * sizeof(int),  // cluster light index list
+        vk::BufferUsageFlagBits::eStorageBuffer,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCached);
+
+    ctx.writeDescriptorSet(sceneLighting.lightInfoBuffer.get().descriptorInfo(),
+                           sceneLighting.clusterLightingSet, vk::DescriptorType::eStorageBuffer,
+                           0 /* binding */
+    );
+    ctx.writeDescriptorSet(sceneLighting.clusterLightInfoBuffer.get().descriptorInfo(),
+                           sceneLighting.clusterLightingSet, vk::DescriptorType::eStorageBuffer,
+                           1 /* binding */
     );
 
-    ctx.writeDescriptorSet(
-      sceneLighting.lightInfoBuffer.get().descriptorInfo(),
-      sceneLighting.clusterLightingSet,
-      vk::DescriptorType::eStorageBuffer,
-      0 /* binding */
+    ctx.writeDescriptorSet(sceneLighting.lightInfoBuffer.get().descriptorInfo(),
+                           sceneLighting.lightTableSet, vk::DescriptorType::eStorageBuffer,
+                           0 /* binding */
     );
-    ctx.writeDescriptorSet(
-      sceneLighting.clusterLightInfoBuffer.get().descriptorInfo(),
-      sceneLighting.clusterLightingSet,
-      vk::DescriptorType::eStorageBuffer,
-      1 /* binding */
+    ctx.writeDescriptorSet(sceneLighting.clusterLightInfoBuffer.get().descriptorInfo(),
+                           sceneLighting.lightTableSet, vk::DescriptorType::eStorageBuffer,
+                           1 /* binding */
     );
-
-    ctx.writeDescriptorSet(
-      sceneLighting.lightInfoBuffer.get().descriptorInfo(),
-      sceneLighting.lightTableSet,
-      vk::DescriptorType::eStorageBuffer,
-      0 /* binding */
-    );
-    ctx.writeDescriptorSet(
-      sceneLighting.clusterLightInfoBuffer.get().descriptorInfo(),
-      sceneLighting.lightTableSet,
-      vk::DescriptorType::eStorageBuffer,
-      1 /* binding */
+    ctx.writeDescriptorSet(sceneLighting.clusterDimUbo.get().descriptorInfo(),
+                           sceneLighting.lightTableSet, vk::DescriptorType::eUniformBufferDynamic,
+                           2 /* binding */
     );
   }
 
   void SceneEditor::registerLightSource(Shared<LightPrimContainer> lightContainer) {
-    // the minimum contribute to fragment color should be 0.5 / 256.0, so the light range is intensity * sqrt(512.0)
+    // the minimum contribute to fragment color should be 0.5 / 256.0, so the light range is
+    // intensity * sqrt(512.0)
     float lightRadius = sqrt(lightContainer->intensity() * 512.0f);
     auto& lightInfo = sceneLighting.lightList.emplace_back();
 
@@ -209,7 +225,8 @@ void main() {
     lightInfo.color = glm::vec4(lightContainer->lightColor(), lightContainer->intensity());
   }
 
-  inline void _getAABBFromSphere(const glm::vec3 center, float radius, glm::vec3& minPos, glm::vec3& maxPos) {
+  inline void _getAABBFromSphere(const glm::vec3 center, float radius, glm::vec3& minPos,
+                                 glm::vec3& maxPos) {
     minPos = center - radius;
     maxPos = center + radius;
   }
@@ -223,17 +240,17 @@ void main() {
     int renderingLights = 0;
     for (auto& lightInfo : sceneLighting.lightList) {
       const glm::vec3& center = lightInfo.sphere;
-      if ((center - cameraPos).length() > lightInfo.sphere.w) { // camera is not inside light sphere
+      if ((center - cameraPos).length()
+          > lightInfo.sphere.w) {  // camera is not inside light sphere
         _getAABBFromSphere(center, lightInfo.sphere.w, minPos, maxPos);
-        if (!sceneRenderData.camera.get().isAABBVisible(minPos, maxPos)) { // light is not visible
+        if (!sceneRenderData.camera.get().isAABBVisible(minPos, maxPos)) {  // light is not visible
           continue;
         }
       }
 
-      memcpy(
-        (SceneEditor::SceneLightInfo*)sceneLighting.lightInfoBuffer.get().mappedAddress() + renderingLights,
-        &lightInfo, sizeof(SceneEditor::SceneLightInfo)
-      );
+      memcpy((SceneEditor::SceneLightInfo*)sceneLighting.lightInfoBuffer.get().mappedAddress()
+                 + renderingLights,
+             &lightInfo, sizeof(SceneEditor::SceneLightInfo));
       ++renderingLights;
     }
     if (renderingLights == 0) {
@@ -248,31 +265,32 @@ void main() {
     cmd.begin();
 
     (*cmd).bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-      /*pipeline layout*/ sceneLighting.clusterLightPipeline.get(),
-      /*firstSet*/ 0,
-      /*descriptor sets*/{ sceneLighting.clusterLightingSet },
-      /*dynamic offset*/{}, ctx.dispatcher);
+                              /*pipeline layout*/ sceneLighting.clusterLightPipeline.get(),
+                              /*firstSet*/ 0,
+                              /*descriptor sets*/ {sceneLighting.clusterLightingSet},
+                              /*dynamic offset*/ {}, ctx.dispatcher);
     (*cmd).bindPipeline(vk::PipelineBindPoint::eCompute, sceneLighting.clusterLightPipeline.get());
 
     const auto& cam = sceneRenderData.camera.get();
     // view
     (*cmd).pushConstants(sceneLighting.clusterLightPipeline.get(),
-      vk::ShaderStageFlagBits::eCompute, 0, sizeof(glm::mat4),
-      &cam.matrices.view);
+                         vk::ShaderStageFlagBits::eCompute, 0, sizeof(glm::mat4),
+                         &cam.matrices.view);
     // camera info
-    const glm::vec4 cameraInfo = glm::vec4(cam.getFov(), cam.getAspect(), cam.getNearClip(), cam.getFarClip());
+    const glm::vec4 cameraInfo
+        = glm::vec4(cam.getFov(), cam.getAspect(), cam.getNearClip(), cam.getFarClip());
     (*cmd).pushConstants(sceneLighting.clusterLightPipeline.get(),
-      vk::ShaderStageFlagBits::eCompute, sizeof(glm::mat4), sizeof(glm::vec4),
-      &cameraInfo);
+                         vk::ShaderStageFlagBits::eCompute, sizeof(glm::mat4), sizeof(glm::vec4),
+                         &cameraInfo);
     // camera position
     (*cmd).pushConstants(sceneLighting.clusterLightPipeline.get(),
-      vk::ShaderStageFlagBits::eCompute, sizeof(glm::mat4) + sizeof(glm::vec4), sizeof(glm::vec4),
-      &cameraPos);
+                         vk::ShaderStageFlagBits::eCompute, sizeof(glm::mat4) + sizeof(glm::vec4),
+                         sizeof(glm::vec4), &cameraPos);
     // screen size and lightCount
-    const glm::ivec3 clusterInfo{ vkCanvasExtent.width, vkCanvasExtent.height, renderingLights };
-    (*cmd).pushConstants(sceneLighting.clusterLightPipeline.get(),
-      vk::ShaderStageFlagBits::eCompute, sizeof(glm::mat4) + sizeof(glm::vec4) * 2, sizeof(glm::ivec3),
-      &clusterInfo);
+    const glm::ivec3 clusterInfo{vkCanvasExtent.width, vkCanvasExtent.height, renderingLights};
+    (*cmd).pushConstants(
+        sceneLighting.clusterLightPipeline.get(), vk::ShaderStageFlagBits::eCompute,
+        sizeof(glm::mat4) + sizeof(glm::vec4) * 2, sizeof(glm::ivec3), &clusterInfo);
 
     (*cmd).dispatch(32, 16, 1);
 
@@ -280,4 +298,4 @@ void main() {
     cmd.submit(fence.get(), /*reset fence*/ true, /*reset config*/ true);
     fence.get().wait();
   }
-}
+}  // namespace zs

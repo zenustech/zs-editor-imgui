@@ -264,16 +264,16 @@ void main() {
   }
 
   void SceneEditor::rebuildOITFBO() {
-    sceneOITRenderer.accumImage0 = ctx().create2DImage(
-        vkCanvasExtent, vk::Format::eR32G32B32A32Sfloat,
-        /* combined image sampler */ vk::ImageUsageFlagBits::eSampled
-            | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eColorAttachment |
-            /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
-    sceneOITRenderer.accumImage1 = ctx().create2DImage(
-        vkCanvasExtent, colorFormat,
-        /* combined image sampler */ vk::ImageUsageFlagBits::eSampled
-            | vk::ImageUsageFlagBits::eStorage | vk::ImageUsageFlagBits::eColorAttachment |
-            /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
+    sceneOITRenderer.accumImage0
+        = ctx().create2DImage(vkCanvasExtent, vk::Format::eR32G32B32A32Sfloat,
+                              /* combined image sampler */ vk::ImageUsageFlagBits::eSampled
+                                  | vk::ImageUsageFlagBits::eColorAttachment |
+                                  /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
+    sceneOITRenderer.accumImage1
+        = ctx().create2DImage(vkCanvasExtent, colorFormat,
+                              /* combined image sampler */ vk::ImageUsageFlagBits::eSampled
+                                  | vk::ImageUsageFlagBits::eColorAttachment |
+                                  /* input attachment */ vk::ImageUsageFlagBits::eInputAttachment);
 
     sceneOITRenderer.accumFBO = ctx().createFramebuffer(
         {
@@ -329,14 +329,14 @@ void main() {
                                 .setPClearValues(clearValues.data());
       (*cmd).beginRenderPass(renderPassInfo, vk::SubpassContents::eInline);
 
-      auto viewport = vk::Viewport()
-                          .setX(0 /*offsetx*/)
-                          .setY(vkCanvasExtent.height /*-offsety*/)
-                          .setWidth(float(vkCanvasExtent.width))
-                          .setHeight(-float(
-                              vkCanvasExtent.height))  // negative viewport, opengl conformant
-                          .setMinDepth(0.0f)
-                          .setMaxDepth(1.0f);
+      auto viewport
+          = vk::Viewport()
+                .setX(0 /*offsetx*/)
+                .setY(vkCanvasExtent.height /*-offsety*/)
+                .setWidth(float(vkCanvasExtent.width))
+                .setHeight(-float(vkCanvasExtent.height))  // negative viewport, opengl conformant
+                .setMinDepth(0.0f)
+                .setMaxDepth(1.0f);
       (*cmd).setViewport(0, {viewport});
       (*cmd).setScissor(0, {vk::Rect2D(vk::Offset2D(), vkCanvasExtent)});
 
