@@ -218,11 +218,20 @@ float GGX(float cosine, float k){
   return cosine / (cosine * (1.0 - k) + k);
 }
 
+// http://www.cemyuksel.com/research/pointlightattenuation/
+float pointLightAttenuation(float d, float r){
+  float d2 = d * d;
+  r *= r; // r becomes r2
+  return 2.0 / (d2 + r + d * sqrt(d2 + r));
+}
+
 vec3 CookTorrance(in LightInfo lightInfo, in ShadeContext context){
   // vector from fragment to light source in world space
   vec3 L = lightInfo.sphere.xyz - inWorldPos.xyz;
-  float invLightDist2 = 1.0 / dot(L, L);
-  L = normalize(L);
+  // float invLightDist2 = 1.0 / dot(L, L);
+  float d = length(L);
+  float lightAtten = pointLightAttenuation(d, 1.0);
+  L = L / d;
 
   /* Lambert */
   // this variable has been calculated in ShadeContext
@@ -246,7 +255,7 @@ vec3 CookTorrance(in LightInfo lightInfo, in ShadeContext context){
   vec3 specular = F * (D * G / max(0.002, 4.0 * context.NV * NL));
 
   vec3 Kd = clamp((1.0 - F), 0.0, 1.0) * (1.0 - metallic);
-  vec3 light = (NL * lightInfo.color.a * invLightDist2) * lightInfo.color.rgb;
+  vec3 light = (NL * lightInfo.color.a * lightAtten) * lightInfo.color.rgb;
 
   return (Kd * context.lambert + specular) * light;
 }
@@ -261,7 +270,7 @@ void main() {
   context.a = roughness * roughness;
   context.a2 = context.a * context.a;
 
-  int cid_base = getClusterIndex() << 5;
+  int cid_base = getClusterIndex() << 6;
   int sizeOfClusterLights = lightIndices[cid_base];
   outFragColor.rgb = vec3(0.0);
   for (int i = 1; i <= sizeOfClusterLights; ++i){
@@ -271,11 +280,7 @@ void main() {
 
   // fake environment lighting
   // outFragColor.rgb += context.lambert * ambient;
-  // outFragColor.rgb = vec3(floor(gl_FragCoord.xy / 32) * 0.01, floor(inViewVec.w / 625.0) * 0.03);
-  // outFragColor.rgb = vec3(lightIndices[cid_base + 29], lightIndices[cid_base + 30], lightIndices[cid_base + 31]) * 0.001;
-  // outFragColor.rgb = vec3(sizeOfClusterLights / 20.0, sizeOfClusterLights / 20.0, inViewVec.w * 0.0025);
 
-  // outFragColor.r = sizeOfClusterLights / 20.0;
   outFragColor.a = 1.0;
 
   outTag.r = pushConstant.objId;
@@ -301,34 +306,39 @@ layout (push_constant) uniform Model {
  	mat4 model;
 } params;
 
-layout (location = 0) out vec3 outNormal;
+layout (location = 0) out vec3 outNormal; // world space normal
 layout (location = 1) out vec2 outUV;
-layout (location = 2) out vec3 outViewVec;
-layout (location = 3) out vec3 outLightVec;
+layout (location = 2) out vec4 outWorldPos; // xyz: world space position, w: positive depth
+layout (location = 3) out vec3 outWorldViewVec; // world space offset from vertex to camera(not normalized)
 layout (location = 4) out ivec2 outTexId;
 
 void main() 
 {
-	vec4 viewPos = cameraUbo.view * params.model * vec4(inPos, 1.0);
-	gl_Position = cameraUbo.projection * viewPos;
+  // world space
+	vec4 pos = params.model * vec4(inPos, 1.0);
+  outWorldPos.xyz = pos.xyz;
+  outWorldViewVec = (inverse(cameraUbo.view) * vec4(0.0, 0.0, 0.0, 1.0) - pos).xyz;
+  
+  // view space
+  pos = cameraUbo.view * pos;
+  outWorldPos.w = abs(pos.z);
+
+  // projection space
+	gl_Position = cameraUbo.projection * pos;
 
   outUV = inUV;
   outTexId = inTexId;
-	outNormal = normalize(cameraUbo.view * params.model * vec4(inNormal, 0.0f)).xyz;
-
-	vec3 lightPos = vec3(0.0f);
-	outLightVec = lightPos.xyz - viewPos.xyz;
-	outViewVec = viewPos.xyz - vec3(0.0f);
+	outNormal = normalize(params.model * vec4(inNormal, 0.0f)).xyz;
 }
 )";
   static const char g_mesh_frag_bindless_code[] = R"(
 #version 450
 #extension GL_EXT_nonuniform_qualifier : enable
 
-layout (location = 0) in vec3 inNormal;
+layout (location = 0) in vec3 inNormal; // world space normal
 layout (location = 1) in vec2 inUV;
-layout (location = 2) in vec3 inViewVec;
-layout (location = 3) in vec3 inLightVec;
+layout (location = 2) in vec4 inWorldPos; // xyz: world space position, w: positive depth
+layout (location = 3) in vec3 inWorldViewVec; // world space offset from vertex to camera(not normalized)
 layout (location = 4) flat in ivec2 inTexId; // <texture type, texture id>
 
 layout (push_constant) uniform fragmentPushConstants {
@@ -342,26 +352,114 @@ layout (set = 1, binding = 3, r32f) uniform image2D g_storageImages[];
 // layout (set = 1, binding = 4) uniform subpassInput g_inputs[1000];
 // layout (set = 1, binding = 0) uniform sampler3D g_tex3ds[];
 
+struct LightInfo{
+  vec4 sphere; // xyz: world space position, w: radius
+  vec4 color; // rgb: color, a: intensity
+};
+
+layout (set = 2, binding = 0) readonly buffer LightList {
+  LightInfo lights[];
+};
+layout (set = 2, binding = 1) readonly buffer ClusterLightIndexInfo {
+  int lightIndices[];
+};
+layout (set = 2, binding = 2) uniform LightClusterParam {
+  ivec2 clusterCountVec; // x: cluster count per line, y: per depth
+} lightClusterUbo;
+
 layout (location = 0) out vec4 outFragColor;
 layout (location = 1) out ivec3 outTag;
 
+const float PI = 3.1415926;
+const float invPI = 1.0 / PI;
+
+const float ambient = 0.02;
+const float roughness = 0.9;
+const float metallic = 0.1;
+
+struct ShadeContext{
+  vec3 albedo;
+  vec3 lambert;
+  vec3 N;
+  vec3 V;
+  float NV;
+  float a;
+  float a2;
+};
+
+int getClusterIndex(){
+  ivec3 cid_vec = ivec3(gl_FragCoord.xy / 32, floor(inWorldPos.w / 625.0));
+  // return int(dot(cid_vec, ivec3(1, pushConstant.clusterCountVec.x, pushConstant.clusterCountVec.y)));
+  return int(dot(cid_vec, ivec3(1, lightClusterUbo.clusterCountVec.x, lightClusterUbo.clusterCountVec.y)));
+}
+
+float GGX(float cosine, float k){
+  return cosine / (cosine * (1.0 - k) + k);
+}
+
+// http://www.cemyuksel.com/research/pointlightattenuation/
+float pointLightAttenuation(float d, float r){
+  float d2 = d * d;
+  r *= r; // r becomes r2
+  return 2.0 / (d2 + r + d * sqrt(d2 + r));
+}
+
+vec3 CookTorrance(in LightInfo lightInfo, in ShadeContext context){
+  // vector from fragment to light source in world space
+  vec3 L = lightInfo.sphere.xyz - inWorldPos.xyz;
+  // float invLightDist2 = 1.0 / dot(L, L);
+  float d = length(L);
+  float lightAtten = pointLightAttenuation(d, 1.0);
+  L = L / d; // normalize
+
+  /* Specular */
+  // normal distribution
+  vec3 HalfVec = normalize(L + context.V);
+  float NH = max(0.0, dot(context.N, HalfVec));
+  float D = context.a2 / (PI * pow(NH * NH * (context.a2 - 1.0) + 1.0, 2.0));
+  // Geometry
+  float k = pow(context.a + 1.0, 2.0) * 0.125;
+  float NL = max(0.0, dot(context.N, L));
+  float G = GGX(NL, k) * GGX(context.NV, k);
+  // fresnel
+  vec3 f0 = mix(vec3(0.05), context.albedo, metallic);
+  float _temp = 1.0 - context.NV;
+  _temp = _temp * _temp;
+  _temp = _temp * _temp * (1.0 - context.NV); // pow(1.0 - context.NV, 5.0)
+  vec3 F = f0 + (1.0 - f0) * _temp;
+  vec3 specular = F * (D * G / max(0.002, 4.0 * context.NV * NL));
+
+  vec3 Kd = clamp((1.0 - F), 0.0, 1.0) * (1.0 - metallic);
+  vec3 light = (NL * lightInfo.color.a * lightAtten) * lightInfo.color.rgb;
+
+  return (Kd * context.lambert + specular) * light;
+}
+
 void main() 
 {
-	vec3 N = normalize(inNormal);
-	vec3 L = normalize(inLightVec);
-	vec3 V = normalize(inViewVec);
-	vec3 ambient = vec3(0.2);
-	vec3 diffuse = max(dot(N, L), 0.0) * vec3(1.0);
+  // pre-calculation
+  ShadeContext context;
+  context.N = normalize(inNormal);
+  context.V = normalize(inWorldViewVec);
+  context.NV = max(0.0, dot(context.N, context.V));
+  context.a = roughness * roughness;
+  context.a2 = context.a * context.a;
 
   vec3 clr = vec3(0.f);
   if (nonuniformEXT(inTexId.x) == 0 && nonuniformEXT(inTexId.y) >= 0)
     clr = texture(g_tex2ds[nonuniformEXT(inTexId.y)], inUV).rgb;
-  // if (pushConstant.useTexture > 0) {
-  //   clr = texture(TEX_0, inUV).rgb;
-  // } else {
-  //   clr = inColor.rgb;
-  // }
-	outFragColor = vec4((ambient + diffuse) * clr, 0.5);
+  context.albedo = clr;
+  context.lambert = clr * invPI;
+
+  int cid_base = getClusterIndex() << 6;
+  int sizeOfClusterLights = lightIndices[cid_base];
+  outFragColor.rgb = vec3(0.0);
+  for (int i = 1; i <= sizeOfClusterLights; ++i){
+    int lid = lightIndices[cid_base + i];
+    outFragColor.rgb += CookTorrance(lights[lid], context);
+  }
+  outFragColor.a = 1.0;
+
   outTag.r = pushConstant.objId;
   outTag.g = -1;
   outTag.b = gl_PrimitiveID;
@@ -779,11 +877,13 @@ void main()
     {
       auto &texturePreviewVertShader = ResourceSystem::get_shader("default_texture_preview.vert");
       auto &texturePreviewFragShader = ResourceSystem::get_shader("default_texture_preview.frag");
+      ctx.acquireSet(texturePreviewFragShader.layout(2), sceneLighting.lightTableSet);
 
       sceneRenderer.bindlessPipeline
           = pipelineBuilder.setShader(texturePreviewFragShader)
                 .setDescriptorSetLayouts({}, true)
                 .addDescriptorSetLayout(ctx.bindlessDescriptorSetLayout, 1)
+                .addDescriptorSetLayout(texturePreviewFragShader.layout(2), 2)
                 .setShader(texturePreviewVertShader)
                 .setDepthCompareOp(SceneEditor::reversedZ ? vk::CompareOp::eGreaterOrEqual
                                                           : vk::CompareOp::eLessOrEqual)
@@ -1723,8 +1823,8 @@ void main()
               vk::PipelineBindPoint::eGraphics,
               /*pipeline layout*/ sceneRenderer.bindlessPipeline.get(),
               /*firstSet*/ 0,
-              /*descriptor sets*/ {sceneRenderData.sceneCameraSet, bindlessSet},
-              /*dynamic offset*/ {0}, ctx.dispatcher);
+              /*descriptor sets*/ {sceneRenderData.sceneCameraSet, bindlessSet, sceneLighting.lightTableSet },
+              /*dynamic offset*/ {0, 0}, ctx.dispatcher);
           (*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics,
                               sceneRenderer.bindlessPipeline.get());
 

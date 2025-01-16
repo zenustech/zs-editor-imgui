@@ -7,7 +7,7 @@ namespace zs {
 
 const int CLUSTER_PIXEL_SIZE = 32;
 const int CLUSTER_Z_SIZE = 32;
-const int CLUSTER_LIGHT_CAPACITY = 31;
+const int CLUSTER_LIGHT_CAPACITY = 63;
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
@@ -22,8 +22,7 @@ struct LightInfo{
 layout(push_constant) uniform CameraInfo {
   layout (offset = 0) mat4 view;
   layout (offset = 64) vec4 cameraInfo; // fov, aspect, near, far
-  layout (offset = 80) vec4 cameraPos; // world space camera position
-  layout (offset = 96) ivec3 screenAndLightInfo; // screen width, screen height, light count
+  layout (offset = 80) ivec3 screenAndLightInfo; // screen width, screen height, light count
 } CameraUbo;
 layout(std430, binding = 0) readonly buffer LightList {
   LightInfo lightList[];
@@ -51,11 +50,12 @@ void getPlanes(vec2 nearPlaneUV, vec2 nearPlaneUVNext, in mat4 invView, out vec4
   planes[1].xyz = normalize(cross(nearRightUp, nearUp)); // right
   planes[2].xyz = normalize(cross(nearRight, nearRightUp)); // top
   planes[3].xyz = normalize(cross(nearLeftDown, nearRight)); // down
+
   // convert into world space
   for (int i=0; i<4; ++i){
     planes[i].w = 0.0;
     planes[i].xyz = normalize((invView * planes[i]).xyz); // convert normal from view space to world space
-    planes[i].w = dot(planes[i].xyz, CameraUbo.cameraPos.xyz); // plane offset
+    planes[i].w = dot(planes[i].xyz, invView[3].xyz /* camera world pos */ ); // plane offset
   }
 }
 
@@ -90,7 +90,7 @@ void main() {
   // calculate forward direction once
   planes[4] = -invView[2]; // world space camera forward
   planes[4].xyz = normalize(planes[4].xyz);
-  planes[4].w = dot(planes[4].xyz, CameraUbo.cameraPos.xyz); // plane offset
+  planes[4].w = dot(planes[4].xyz, invView[3].xyz /* world camera pos */); // plane offset
 
   for (int cid = tid; cid < cluster_count; cid += TOTAL_THREAD_SIZE){
     // convert cluster id from cid to (cidx, cidy, cidz)
@@ -112,7 +112,7 @@ void main() {
 
     // traverse lights and check intersection
     int clusterLightCount = 0;
-    int clusterLightIndexBase = cid << 5; // 1(size of index) + 31(index list) ints for each cluster
+    int clusterLightIndexBase = cid << 6; // 1(size of index) + 31(index list) ints for each cluster
     for (int i=0; i<CameraUbo.screenAndLightInfo.z && clusterLightCount<CLUSTER_LIGHT_CAPACITY; ++i){
       if (intersect(planes, depthRange, lightList[i]) > 0.5){
         ++clusterLightCount;
@@ -120,11 +120,6 @@ void main() {
       }
     }
     lightIndices[clusterLightIndexBase] = clusterLightCount;
-    
-    float dist = dot(planes[0].xyz, lightList[0].sphere.xyz) - planes[0].w;
-    lightIndices[clusterLightIndexBase + 29] = int(planes[0].x * 1000.0);
-    lightIndices[clusterLightIndexBase + 30] = int(planes[0].y * 1000.0);
-    lightIndices[clusterLightIndexBase + 31] = int(dist * 2.0);
   }
 }
 )";
@@ -140,7 +135,7 @@ void main() {
     sceneLighting.lightList.reserve(32);
 
     sceneLighting.clusterLightPipeline = Pipeline{
-        clusterLightShader, sizeof(glm::mat4) + sizeof(glm::vec4) * 2 + sizeof(glm::ivec3)};
+        clusterLightShader, sizeof(glm::mat4) + sizeof(glm::vec4) + sizeof(glm::ivec3)};
 
     sceneLighting.clusterDimUbo = ctx.createBuffer(
         sizeof(glm::ivec2), vk::BufferUsageFlagBits::eUniformBuffer,
@@ -159,6 +154,20 @@ void main() {
           targetBufferBytes, vk::BufferUsageFlagBits::eStorageBuffer,
           vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCached);
       sceneLighting.lightInfoBuffer.get().map();
+
+
+      ctx().writeDescriptorSet(
+        sceneLighting.lightInfoBuffer.get().descriptorInfo(),
+        sceneLighting.clusterLightingSet,
+        vk::DescriptorType::eStorageBuffer,
+        0 /* binding */
+      );
+      ctx().writeDescriptorSet(
+        sceneLighting.lightInfoBuffer.get().descriptorInfo(),
+        sceneLighting.lightTableSet,
+        vk::DescriptorType::eStorageBuffer,
+        0 /* binding */
+      );
     }
   }
 
@@ -216,8 +225,7 @@ void main() {
   }
 
   void SceneEditor::registerLightSource(Shared<LightPrimContainer> lightContainer) {
-    // the minimum contribute to fragment color should be 0.5 / 256.0, so the light range is
-    // intensity * sqrt(512.0)
+    // the minimum contribute to fragment color should be 0.5 / 256.0, so the light range is sqrt(intensity * 512.0)
     float lightRadius = sqrt(lightContainer->intensity() * 512.0f);
     auto& lightInfo = sceneLighting.lightList.emplace_back();
 
@@ -282,15 +290,11 @@ void main() {
     (*cmd).pushConstants(sceneLighting.clusterLightPipeline.get(),
                          vk::ShaderStageFlagBits::eCompute, sizeof(glm::mat4), sizeof(glm::vec4),
                          &cameraInfo);
-    // camera position
-    (*cmd).pushConstants(sceneLighting.clusterLightPipeline.get(),
-                         vk::ShaderStageFlagBits::eCompute, sizeof(glm::mat4) + sizeof(glm::vec4),
-                         sizeof(glm::vec4), &cameraPos);
     // screen size and lightCount
     const glm::ivec3 clusterInfo{vkCanvasExtent.width, vkCanvasExtent.height, renderingLights};
     (*cmd).pushConstants(
         sceneLighting.clusterLightPipeline.get(), vk::ShaderStageFlagBits::eCompute,
-        sizeof(glm::mat4) + sizeof(glm::vec4) * 2, sizeof(glm::ivec3), &clusterInfo);
+        sizeof(glm::mat4) + sizeof(glm::vec4), sizeof(glm::ivec3), &clusterInfo);
 
     (*cmd).dispatch(32, 16, 1);
 
