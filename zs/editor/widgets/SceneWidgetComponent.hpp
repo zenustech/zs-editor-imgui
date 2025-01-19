@@ -16,13 +16,18 @@ namespace zs {
     glm::uvec2 offset, extent;
   };
 
+  struct SceneEditorDefaultMode {
+    SceneEditorDefaultMode(SceneEditor &editor);
+    void paint();
+    SceneEditor &editor;
+  };
   struct SceneEditorRoamingMode {
-    SceneEditorRoamingMode(SceneEditor &editor) : editor{editor} {}
+    SceneEditorRoamingMode(SceneEditor &editor);
     void paint();
     SceneEditor &editor;
   };
   struct SceneEditorSelectionMode {
-    SceneEditorSelectionMode(SceneEditor &editor) : editor{editor} {}
+    SceneEditorSelectionMode(SceneEditor &editor);
     void paint();
 
     void onEvent(GuiEvent *e) { _selectOperation.onEvent(e); }
@@ -32,7 +37,7 @@ namespace zs {
     SceneEditor &editor;
   };
   struct SceneEditorPaintMode {
-    SceneEditorPaintMode(SceneEditor &editor) : editor{editor} {}
+    SceneEditorPaintMode(SceneEditor &editor);
     void paint();
     SceneEditor &editor;
   };
@@ -56,8 +61,8 @@ namespace zs {
     }
 
     input_mode_e _index{_still};
-    variant<std::monostate, Owner<SceneEditorRoamingMode>, Owner<SceneEditorSelectionMode>,
-            Owner<SceneEditorPaintMode>>
+    variant<Owner<SceneEditorDefaultMode>, Owner<SceneEditorRoamingMode>,
+            Owner<SceneEditorSelectionMode>, Owner<SceneEditorPaintMode>>
         _modes;
   };
 

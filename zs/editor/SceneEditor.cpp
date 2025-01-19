@@ -1823,7 +1823,8 @@ void main()
               vk::PipelineBindPoint::eGraphics,
               /*pipeline layout*/ sceneRenderer.bindlessPipeline.get(),
               /*firstSet*/ 0,
-              /*descriptor sets*/ {sceneRenderData.sceneCameraSet, bindlessSet, sceneLighting.lightTableSet },
+              /*descriptor sets*/
+              {sceneRenderData.sceneCameraSet, bindlessSet, sceneLighting.lightTableSet},
               /*dynamic offset*/ {0, 0}, ctx.dispatcher);
           (*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics,
                               sceneRenderer.bindlessPipeline.get());

@@ -121,8 +121,13 @@ add_executable(zs_editor_imgui
 	zs/editor/SceneEditorLighting.cpp
 	zs/editor/SceneEditorOcclusionQuery.cpp
 
-	zs/editor/widgets/DetailWidgetComponent.cpp
 	zs/editor/widgets/SceneWidgetComponent.cpp
+	zs/editor/widgets/SceneWidgetDefaultMode.cpp
+	zs/editor/widgets/SceneWidgetRoamingMode.cpp
+	zs/editor/widgets/SceneWidgetSelectionMode.cpp
+	zs/editor/widgets/SceneWidgetPaintMode.cpp
+
+	zs/editor/widgets/DetailWidgetComponent.cpp
 	zs/editor/widgets/SequencerComponent.cpp
 	zs/editor/widgets/TreeWidgetComponent.cpp
 	zs/editor/widgets/TreeWidgetUsdComponent.cpp
