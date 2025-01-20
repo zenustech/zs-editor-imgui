@@ -1,4 +1,6 @@
 #pragma once
+#include <optional>
+
 #include "glm/glm.hpp"
 #include "imgui.h"
 #include "world/async/StateMachine.hpp"
@@ -18,27 +20,39 @@ namespace zs {
 
   struct SceneEditorDefaultMode {
     SceneEditorDefaultMode(SceneEditor &editor);
+    
     void paint();
+    bool onEvent(GuiEvent *e) { return false; }
+
     SceneEditor &editor;
   };
   struct SceneEditorRoamingMode {
     SceneEditorRoamingMode(SceneEditor &editor);
+
     void paint();
+    bool onEvent(GuiEvent *e) { return false; }
+
     SceneEditor &editor;
   };
   struct SceneEditorSelectionMode {
     SceneEditorSelectionMode(SceneEditor &editor);
+
+    void init();  // initialize selection operation
     void paint();
+    bool onEvent(GuiEvent *e);
 
-    void onEvent(GuiEvent *e) { _selectOperation.onEvent(e); }
-
-    ImVec2 selectionStart, selectionEnd;
+    ImGuiMouseButton _mouseBinding{ImGuiMouseButton_Left};
+    std::optional<ImVec2> selectionStart{}, selectionEnd{};
+    int _state{0};
     StateMachine _selectOperation;
     SceneEditor &editor;
   };
   struct SceneEditorPaintMode {
     SceneEditorPaintMode(SceneEditor &editor);
+
     void paint();
+    bool onEvent(GuiEvent *e) { return false; }
+
     SceneEditor &editor;
   };
 
@@ -54,11 +68,7 @@ namespace zs {
       return _index == input_mode_e::_select || _index == input_mode_e::_paint;
     }
 
-    void onEvent(GuiEvent *e) {
-      return match(
-          [](...) {},
-          [e = FWD(e)](auto &mode) -> decltype((void)mode.onEvent(e)) { mode.onEvent(e); })(_modes);
-    }
+    bool onEvent(GuiEvent *e);
 
     input_mode_e _index{_still};
     variant<Owner<SceneEditorDefaultMode>, Owner<SceneEditorRoamingMode>,

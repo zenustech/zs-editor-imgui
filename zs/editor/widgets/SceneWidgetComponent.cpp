@@ -30,6 +30,7 @@ namespace zs {
         break;
       case input_mode_e::_select:
         _modes = Owner<SceneEditorSelectionMode>{editor};
+        std::get<Owner<SceneEditorSelectionMode>>(_modes).get().init();
         break;
       case input_mode_e::_paint:
         _modes = Owner<SceneEditorPaintMode>{editor};
@@ -698,8 +699,15 @@ namespace zs {
     drawList->ChannelsMerge();
   }
   bool SceneEditorWidgetComponent::onEvent(GuiEvent *e) {
+    if (sceneEditor->interactionMode.onEvent(e)) return e->isAccepted();
     if (sceneEditor->_camCtrl.onEvent(e)) return e->isAccepted();
     return false;
+  }
+  bool SceneEditorInteractionMode::onEvent(GuiEvent *e) {
+    return match(
+        [e](auto &mode) {  // mutable -> decltype(static_cast<bool>(mode.get().onEvent(e))) {
+          return mode.get().onEvent(e);
+        })(_modes);
   }
 
 }  // namespace zs
