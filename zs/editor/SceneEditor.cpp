@@ -1108,6 +1108,7 @@ void main()
     auto &ctx = this->ctx();
     auto plugin = zs_get_scene_manager(zs_get_world());
 
+#if ZS_ENABLE_USD
     zs::SceneConfig conf;
     // "/home/mine/Codes/zpc_poc/assets/HumanFemale/HumanFemale.walk.usd"
     // "E:/Kitchen_set/Kitchen_set.usd"
@@ -1123,6 +1124,7 @@ void main()
     // rootHolder->getName()
     ResourceSystem::register_widget("test_usd",
                                     ui::build_usd_tree_node(scene->getRootPrim().get()));
+#endif
   }
 
   void SceneEditor::loadUVTestScene() {
@@ -1187,6 +1189,8 @@ void main()
     }
     exit(0);
 #endif
+
+#if ZS_ENABLE_USD
     {
       GEOM_PRIM_TEST(plane, "/plane", Plane);
       geomplane->details().texturePath() = "C:/codes/zpc_poc/test.png";
@@ -1218,6 +1222,7 @@ void main()
       eye[3][0] = 4.0f;
       GEOM_PRIM_TEST(cone, "/cone", Cone);
     }
+#endif
 #undef GEOM_PRIM_TEST
   }
 
