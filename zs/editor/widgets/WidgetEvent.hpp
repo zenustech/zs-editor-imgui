@@ -59,6 +59,9 @@ namespace zs {
     float _wheelV{0.f};  // vertical
     float _wheelH{0.f};  // horizontal
 
+    float getScrollV() const noexcept { return _wheelV; }
+    float getScrollH() const noexcept { return _wheelH; }
+
     MouseScrollEvent(MouseEvent &&ev, float wheelV, float wheelH) noexcept
         : MouseEvent{zs::move(ev)}, _wheelV{wheelV}, _wheelH{wheelH} {}
     gui_event_e getGuiEventType() const { return gui_event_mouseScroll; }

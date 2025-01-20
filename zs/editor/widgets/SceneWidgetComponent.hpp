@@ -20,7 +20,7 @@ namespace zs {
 
   struct SceneEditorDefaultMode {
     SceneEditorDefaultMode(SceneEditor &editor);
-    
+
     void paint();
     bool onEvent(GuiEvent *e) { return false; }
 
@@ -50,9 +50,15 @@ namespace zs {
   struct SceneEditorPaintMode {
     SceneEditorPaintMode(SceneEditor &editor);
 
+    void init();  // initialize paint operation
     void paint();
-    bool onEvent(GuiEvent *e) { return false; }
+    bool onEvent(GuiEvent *e);
 
+    ImGuiMouseButton _mouseBinding{ImGuiMouseButton_Left};
+    std::optional<ImVec2> _painterCenter{};
+    float _painterRadius{10.f};
+    bool _painting{false};
+    StateMachine _paintOperation;
     SceneEditor &editor;
   };
 

@@ -90,7 +90,8 @@ namespace zs {
   }
 
   bool SceneEditorSelectionMode::onEvent(GuiEvent *e) {
-    if (_selectOperation.hasValue()) _selectOperation.onEvent(e);
+    assert(_selectOperation.hasValue());
+    _selectOperation.onEvent(e);
     return e->isAccepted();
   }
 

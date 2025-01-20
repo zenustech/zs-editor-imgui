@@ -34,6 +34,7 @@ namespace zs {
         break;
       case input_mode_e::_paint:
         _modes = Owner<SceneEditorPaintMode>{editor};
+        std::get<Owner<SceneEditorPaintMode>>(_modes).get().init();
         break;
       default:
         _modes = Owner<SceneEditorDefaultMode>{editor};
