@@ -171,8 +171,13 @@ layout (location = 2) in vec4 inViewVec; // view offset and positive view depth
 layout (location = 3) in vec3 inWorldPos;
 
 struct LightInfo{
-  vec4 sphere; // xyz: world space position, w: radius
   vec4 color; // rgb: color, a: intensity
+  /*
+  * DISTANT xyz: world space direction, w: angle in degree
+  * POINT xyz: world space position, w: radius
+  */
+  vec4 lightVec;
+  ivec4 lightSourceType;
 };
 
 struct ShadeContext{
@@ -225,13 +230,27 @@ float pointLightAttenuation(float d, float r){
   return 2.0 / (d2 + r + d * sqrt(d2 + r));
 }
 
+void getAttenAndL(in LightInfo lightInfo, out vec3 L, out float lightAtten){
+  if (lightInfo.lightSourceType.x == 0){ // distant light
+    L = normalize(lightInfo.lightVec.xyz);
+    lightAtten = 1.0 - cos(lightInfo.lightVec.w * PI / 180.0);
+  } else if (lightInfo.lightSourceType.x == 1){ // point light
+    // vector from fragment to light source in world space
+    L = lightInfo.lightVec.xyz - inWorldPos.xyz;
+    float d = length(L);
+    lightAtten = pointLightAttenuation(d, 1.0);
+    L = L / d;
+  } else {
+    // not supported light source type
+    L = vec3(1.0);
+    lightAtten = 1.0;
+  }
+}
+
 vec3 CookTorrance(in LightInfo lightInfo, in ShadeContext context){
-  // vector from fragment to light source in world space
-  vec3 L = lightInfo.sphere.xyz - inWorldPos.xyz;
-  // float invLightDist2 = 1.0 / dot(L, L);
-  float d = length(L);
-  float lightAtten = pointLightAttenuation(d, 1.0);
-  L = L / d;
+  vec3 L;
+  float lightAtten;
+  getAttenAndL(lightInfo, L, lightAtten);
 
   /* Lambert */
   // this variable has been calculated in ShadeContext
@@ -353,8 +372,13 @@ layout (set = 1, binding = 3, r32f) uniform image2D g_storageImages[];
 // layout (set = 1, binding = 0) uniform sampler3D g_tex3ds[];
 
 struct LightInfo{
-  vec4 sphere; // xyz: world space position, w: radius
   vec4 color; // rgb: color, a: intensity
+  /*
+  * DISTANT xyz: world space direction, w: angle in degree
+  * POINT xyz: world space position, w: radius
+  */
+  vec4 lightVec;
+  ivec4 lightSourceType;
 };
 
 layout (set = 2, binding = 0) readonly buffer LightList {
@@ -404,13 +428,27 @@ float pointLightAttenuation(float d, float r){
   return 2.0 / (d2 + r + d * sqrt(d2 + r));
 }
 
+void getAttenAndL(in LightInfo lightInfo, out vec3 L, out float lightAtten){
+  if (lightInfo.lightSourceType.x == 0){ // distant light
+    L = normalize(lightInfo.lightVec.xyz);
+    lightAtten = 1.0 - cos(lightInfo.lightVec.w * PI / 180.0);
+  } else if (lightInfo.lightSourceType.x == 1){ // point light
+    // vector from fragment to light source in world space
+    L = lightInfo.lightVec.xyz - inWorldPos.xyz;
+    float d = length(L);
+    lightAtten = pointLightAttenuation(d, 1.0);
+    L = L / d;
+  } else {
+    // not supported light source type
+    L = vec3(1.0);
+    lightAtten = 1.0;
+  }
+}
+
 vec3 CookTorrance(in LightInfo lightInfo, in ShadeContext context){
-  // vector from fragment to light source in world space
-  vec3 L = lightInfo.sphere.xyz - inWorldPos.xyz;
-  // float invLightDist2 = 1.0 / dot(L, L);
-  float d = length(L);
-  float lightAtten = pointLightAttenuation(d, 1.0);
-  L = L / d; // normalize
+  vec3 L;
+  float lightAtten;
+  getAttenAndL(lightInfo, L, lightAtten);
 
   /* Specular */
   // normal distribution
@@ -1074,12 +1112,7 @@ void main()
     // "/home/mine/Codes/zpc_poc/assets/HumanFemale/HumanFemale.walk.usd"
     // "E:/Kitchen_set/Kitchen_set.usd"
     // conf.setString("srcPath", "E:/home_usd/result/start.usd");
-    conf.setString("srcPath", "E:/Kitchen_set/Kitchen_set.usd");
-
-    auto &cam = sceneRenderData.camera.get();
-    cam.position = glm::vec3(-154.649, -138.206, -291.733);
-    cam.rotation = glm::vec3(-39.5, -1.4, 0.0);
-    cam.updateViewMatrix();
+    conf.setString("srcPath", "E:/Intel_mooreLane/USD/4004MooreLane_Assembly.usda");
 
     auto scene = plugin->createScene("test");
     scene->openScene(conf);

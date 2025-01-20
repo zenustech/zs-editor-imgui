@@ -462,8 +462,15 @@ namespace zs {
     } sceneOITRenderer;
 
     struct SceneLightInfo {
-      glm::vec4 sphere;  // xyz: world space position, w: radius
       glm::vec4 color;   // rgb: color, a: intensity
+      /*
+      * for different types of lights, lightVec has different data
+      * DISTANT: xyz: world space direction, w:  angle in degree
+      * POINT: xyz: world space position, w: radius
+      * other type to be done
+      */
+      glm::vec4 lightVec;
+      glm::ivec4 lightSourceType; // int value of enum LightSourceType
     };
 
     struct SceneLighting {
