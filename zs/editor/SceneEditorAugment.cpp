@@ -1,6 +1,7 @@
 #include "SceneEditor.hpp"
 #include "fonts/stb_font_consolas_24_latin1.inl"
 #include "imgui.h"
+#include "world/scene/PrimitiveOperation.hpp"
 #include "world/scene/PrimitiveQuery.hpp"
 #include "world/system/ZsExecSystem.hpp"
 
@@ -748,6 +749,7 @@ void main() {
           /// actual painting
 
           // zs_execution().ref_event_scheduler().enqueue([&ctx, this]() {});
+          std::map<ZsPrimitive *, std::vector<PrimIndex>> paintJobs;
           for (int i = 0; i < numSelectedIndices; ++i) {
             auto ids = selectedIndices[i];
 
@@ -760,6 +762,8 @@ void main() {
             if (!pModel || currentVisiblePrimsDrawn.at(prim.get()) == 0) continue;
             auto &model = *pModel;
 
+            paintJobs[prim.get()].push_back(ids.y);
+#if 0
             // auto &clrBuffer = sceneRenderData.models[ids.x].getColorBuffer();
             // auto &clrBuffer = getScenePrimByIndex(ids.x)->vkTriMesh(ctx).getColorBuffer();
             auto &clrBuffer = model.getColorBuffer();
@@ -772,11 +776,23 @@ void main() {
               clrBuffer.map();
             }
             *((glm::vec3 *)clrBuffer.mappedAddress() + ids.y) = paintColor;
+#endif
           }
+#if 0
           if (prevClrBuffer) {
             (*prevClrBuffer).unmap();
             (*prevClrBuffer).flush();
           }
+#endif
+          ZS_EVENT_SCHEDULER().emplace(
+              [paintJobs = zs::move(paintJobs),
+               paintColor = zs::vec<float, 3>{paintColor[0], paintColor[1], paintColor[2]}]() {
+                /// @note currently the prim is totally updated!
+                for (const auto &[primPtr, jobs] : paintJobs) {
+                  // changes happened at zsmesh,
+                  assign_zsmesh_colors(*primPtr, jobs, paintColor);
+                }
+              });
 
           paintCenter = {};
         }
