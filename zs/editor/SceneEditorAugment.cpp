@@ -790,7 +790,8 @@ void main() {
                 /// @note currently the prim is totally updated!
                 for (const auto &[primPtr, jobs] : paintJobs) {
                   // changes happened at zsmesh,
-                  assign_zsmesh_colors(*primPtr, jobs, paintColor);
+                  if (primPtr->details().isAttribTimeInvariant(KEYFRAME_ATTRIB_COLOR_LABEL))
+                    assign_zsmesh_colors(*primPtr, jobs, paintColor);
                 }
               });
 
