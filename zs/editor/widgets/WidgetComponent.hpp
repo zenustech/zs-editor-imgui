@@ -140,7 +140,7 @@ namespace zs {
       return std::dynamic_pointer_cast<const T>(_widget);
     }
 
-    bool onEvent(GuiEvent *e) { return _widget->onEvent(e); }
+    bool onEvent(GuiEvent *e) override { return _widget->onEvent(e); }
     gui_widget_e getWidgetType() const { return _widget->getWidgetType(); }
 
   private:
@@ -383,7 +383,7 @@ namespace zs {
     /// its address is expected
     template <typename... Args> TextWidgetComponent(std::string_view templ = "", Args &&...args)
         : ActionWidgetComponent(
-              text_paint_callable(templ, index_sequence_for<Args...>{}, FWD(args)...)) {}
+            text_paint_callable(templ, index_sequence_for<Args...>{}, FWD(args)...)) {}
     ~TextWidgetComponent() = default;
   };
 
