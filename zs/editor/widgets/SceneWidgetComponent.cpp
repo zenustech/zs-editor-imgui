@@ -570,18 +570,20 @@ namespace zs {
         // primary options
         ImVec2 iconCursorPos{canvasMinCursorPos.x + style.FramePadding.x * 2,
                              canvasMinCursorPos.y + style.FramePadding.y * 2};
+        ImGui::SetCursorScreenPos(iconCursorPos + secondaryScenePanelOffset);
+
         auto drawOption = [&iconCursorPos](const char *label, bool &enable,
                                            const char *hint = nullptr) {
           auto sz = ImGui::CalcTextSize(label);
           if (ImGui::Selectable(label, enable, 0, sz)) {
             enable ^= 1;
           }
-          if (ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip | ImGuiHoveredFlags_DelayNone)) {
-            if (hint) ImGui::SetTooltip(hint);
+          if (hint
+              && ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip | ImGuiHoveredFlags_DelayNone)) {
+            ImGui::SetTooltip(hint);
           }
         };
 
-        ImGui::SetCursorScreenPos(iconCursorPos + secondaryScenePanelOffset);
         ImGui::BeginGroup();
         ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
         drawOption(ICON_MD_PICTURE_IN_PICTURE, drawTexture, (const char *)u8"显示纹理");
