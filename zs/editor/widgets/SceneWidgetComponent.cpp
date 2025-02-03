@@ -493,7 +493,7 @@ namespace zs {
         ImGui::SetCursorScreenPos(ImVec2{iconCursorPos.x - sz.x, iconCursorPos.y});
 
         ImGui::BeginGroup();
-        ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
+        // ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
         for (int i = 0; i < interactionMode.numModes(); ++i) {
           const char *iconText = interactionMode.getIconText((input_mode_e)i);
           auto sz = ImGui::CalcTextSize(iconText);
@@ -507,7 +507,7 @@ namespace zs {
             ImGui::SetTooltip(interactionMode.getModeInfo(static_cast<input_mode_e>(i)));
           }
         }
-        ImGui::PopStyleVar();
+        // ImGui::PopStyleVar();
         ImGui::EndGroup();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNone)) {
           imageHovered = false;
@@ -570,11 +570,13 @@ namespace zs {
         // primary options
         ImVec2 iconCursorPos{canvasMinCursorPos.x + style.FramePadding.x * 2,
                              canvasMinCursorPos.y + style.FramePadding.y * 2};
-        ImGui::SetCursorScreenPos(iconCursorPos + secondaryScenePanelOffset);
+        auto cursorPos = iconCursorPos + secondaryScenePanelOffset;
+        ImGui::SetCursorScreenPos(cursorPos);
 
-        auto drawOption = [&iconCursorPos](const char *label, bool &enable,
-                                           const char *hint = nullptr) {
+        auto drawOption = [/*&cursorPos, &style*/](const char *label, bool &enable,
+                                                   const char *hint = nullptr) {
           auto sz = ImGui::CalcTextSize(label);
+          // ImGui::SetCursorScreenPos(cursorPos);
           if (ImGui::Selectable(label, enable, 0, sz)) {
             enable ^= 1;
           }
@@ -582,10 +584,11 @@ namespace zs {
               && ImGui::IsItemHovered(ImGuiHoveredFlags_ForTooltip | ImGuiHoveredFlags_DelayNone)) {
             ImGui::SetTooltip(hint);
           }
+          // cursorPos.y += sz.y;
         };
 
         ImGui::BeginGroup();
-        ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
+        // ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
         drawOption(ICON_MD_PICTURE_IN_PICTURE, drawTexture, (const char *)u8"显示纹理");
         drawOption(ICON_MD_TEXTURE, showWireframe, (const char *)u8"显示线框");
         drawOption(ICON_MD_PIN, showIndex, (const char *)u8"显示索引");  // 123
@@ -593,7 +596,7 @@ namespace zs {
         drawOption(ICON_MS_TRANSITION_FADE, ignoreDepthTest, (const char *)u8"穿透拾取");
         drawOption(ICON_MS_DRAG_PAN, enableGuizmo, (const char *)u8"仿射转换控制");
 
-        ImGui::PopStyleVar();
+        // ImGui::PopStyleVar();
         ImGui::EndGroup();
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNone)) {
           imageHovered = false;
