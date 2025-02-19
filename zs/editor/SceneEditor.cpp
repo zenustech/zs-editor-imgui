@@ -767,6 +767,7 @@ void main()
     initialRenderSetup();
 
     /// shaders
+#if USE_SCENE_LIGHTING
     sceneRenderer.vertShader
         = ctx.createShaderModuleFromGlsl(g_mesh_pbr_vert_code /*g_mesh_vert_code*/,
                                          vk::ShaderStageFlagBits::eVertex, "default_mesh_vert");
@@ -774,6 +775,14 @@ void main()
         = ctx.createShaderModuleFromGlsl(g_mesh_pbr_frag_code /*g_mesh_frag_code*/,
                                          vk::ShaderStageFlagBits::eFragment, "default_mesh_frag");
     ctx.acquireSet(sceneRenderer.fragShader.get().layout(1), sceneLighting.lightTableSet);
+#else
+    sceneRenderer.vertShader
+        = ctx.createShaderModuleFromGlsl(g_mesh_vert_code /*g_mesh_vert_code*/,
+                                         vk::ShaderStageFlagBits::eVertex, "default_mesh_vert");
+    sceneRenderer.fragShader
+        = ctx.createShaderModuleFromGlsl(g_mesh_frag_code /*g_mesh_frag_code*/,
+                                         vk::ShaderStageFlagBits::eFragment, "default_mesh_frag");
+#endif
 
     // texture
     ResourceSystem::load_shader(ctx, "default_texture_preview.vert",
@@ -812,7 +821,9 @@ void main()
 #endif
 
     ///
+#if USE_SCENE_LIGHTING
     setupLightingResources();
+#endif
     setupOITResources();
     setupPickResources();
     setupAugmentResources();
@@ -1228,7 +1239,9 @@ void main()
 
   void SceneEditor::rebuildAttachments() {
     rebuildSceneFbos();
+#if USE_SCENE_LIGHTING
     rebuildLightingFBO();
+#endif
     rebuildOITFBO();
 
     rebuildPickFbos();
@@ -1358,12 +1371,14 @@ void main()
     timer.tock("SceneEditor:: prepare render");
 #endif
 
-#if ENABLE_PROFILE
-    timer.tick();
-#endif
-    updateClusterLighting();
-#if ENABLE_PROFILE
-    timer.tock("SceneEditor:: update cluster lighting");
+#if USE_SCENE_LIGHTING
+    #if ENABLE_PROFILE
+        timer.tick();
+    #endif
+        updateClusterLighting();
+    #if ENABLE_PROFILE
+        timer.tock("SceneEditor:: update cluster lighting");
+    #endif
 #endif
 
 #if ENABLE_PROFILE
@@ -1827,7 +1842,11 @@ void main()
               vk::PipelineBindPoint::eGraphics,
               /*pipeline layout*/ sceneRenderer.opaquePipeline.get(),
               /*firstSet*/ 0,
+#if USE_SCENE_LIGHTING
               /*descriptor sets*/ {sceneRenderData.sceneCameraSet, sceneLighting.lightTableSet},
+#else
+              /*descriptor sets*/ {sceneRenderData.sceneCameraSet},
+#endif
               /*dynamic offset*/ {0, 0}, ctx.dispatcher);
 #  endif
 

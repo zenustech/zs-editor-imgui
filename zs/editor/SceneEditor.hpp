@@ -35,6 +35,7 @@ namespace zs {
 
 #define ENABLE_FRUSTUM_CULLING 1
 #define ENABLE_OCCLUSION_QUERY 1
+#define USE_SCENE_LIGHTING 1
 
   struct CameraControl {
     void trackCamera(Camera &camera, SceneEditor &sceneEditor);
