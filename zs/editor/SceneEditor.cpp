@@ -29,6 +29,7 @@
 #endif
 
 #define ENABLE_PROFILE 0
+#define USE_SCENE_LIGHTING 0
 
 namespace zs {
 
@@ -325,6 +326,86 @@ layout (push_constant) uniform Model {
  	mat4 model;
 } params;
 
+layout (location = 0) out vec3 outNormal;
+layout (location = 1) out vec2 outUV;
+layout (location = 2) out vec3 outViewVec;
+layout (location = 3) out vec3 outLightVec;
+layout (location = 4) out ivec2 outTexId;
+
+void main() 
+{
+	vec4 viewPos = cameraUbo.view * params.model * vec4(inPos, 1.0);
+	gl_Position = cameraUbo.projection * viewPos;
+
+    outUV = inUV;
+	outNormal = normalize(cameraUbo.view * params.model * vec4(inNormal, 0.0f)).xyz;
+
+	vec3 lightPos = vec3(0.0f);
+	outLightVec = lightPos.xyz - viewPos.xyz;
+	outViewVec = viewPos.xyz - vec3(0.0f);
+    outTexId = inTexId;
+}
+)";
+  static const char g_mesh_frag_bindless_code[] = R"(
+#version 450
+#extension GL_EXT_nonuniform_qualifier : enable
+
+layout (location = 0) in vec3 inNormal;
+layout (location = 1) in vec2 inUV;
+layout (location = 2) in vec3 inViewVec;
+layout (location = 3) in vec3 inLightVec;
+layout (location = 4) flat in ivec2 inTexId;
+
+layout (push_constant) uniform fragmentPushConstants {
+    layout(offset = 16 * 4) int objId;
+} pushConstant;
+
+// layout (set = 1, binding = 0) uniform g_uniformBuffers[1000];
+layout (set = 1, binding = 1) uniform sampler2D g_tex2ds[];
+// layout (set = 1, binding = 2) buffer g_storageBuffers[1000];
+layout (set = 1, binding = 3, r32f) uniform image2D g_storageImages[];
+// layout (set = 1, binding = 4) uniform subpassInput g_inputs[1000];
+// layout (set = 1, binding = 0) uniform sampler3D g_tex3ds[];
+
+layout (location = 0) out vec4 outFragColor;
+layout (location = 1) out ivec3 outTag;
+
+void main() 
+{	
+  vec3 N = normalize(inNormal);
+  vec3 L = normalize(inLightVec);
+  vec3 V = normalize(inViewVec);
+  vec3 ambient = vec3(0.2);
+  vec3 diffuse = max(dot(N, L), 0.0) * vec3(1.0);
+
+  vec3 clr = vec3(0.f);
+  if (nonuniformEXT(inTexId.x) == 0 && nonuniformEXT(inTexId.y) >= 0)
+    clr = texture(g_tex2ds[nonuniformEXT(inTexId.y)], inUV).rgb;
+
+  outFragColor = vec4((ambient + diffuse) * clr, 0.5);
+  outTag.r = pushConstant.objId;
+  outTag.g = -1;
+  outTag.b = gl_PrimitiveID;
+}
+)";
+
+  static const char g_mesh_vert_bindless_pbr_code[] = R"(
+#version 450
+
+layout (location = 0) in vec3 inPos;
+layout (location = 1) in vec3 inNormal;
+layout (location = 2) in vec2 inUV;
+layout (location = 3) in ivec2 inTexId;
+
+layout (set = 0, binding = 0) uniform SceneCamera {
+	mat4 projection;
+	mat4 view;
+} cameraUbo;
+
+layout (push_constant) uniform Model {
+ 	mat4 model;
+} params;
+
 layout (location = 0) out vec3 outNormal; // world space normal
 layout (location = 1) out vec2 outUV;
 layout (location = 2) out vec4 outWorldPos; // xyz: world space position, w: positive depth
@@ -350,7 +431,7 @@ void main()
 	outNormal = normalize(params.model * vec4(inNormal, 0.0f)).xyz;
 }
 )";
-  static const char g_mesh_frag_bindless_code[] = R"(
+  static const char g_mesh_frag_bindless_pbr_code[] = R"(
 #version 450
 #extension GL_EXT_nonuniform_qualifier : enable
 
@@ -775,6 +856,12 @@ void main()
         = ctx.createShaderModuleFromGlsl(g_mesh_pbr_frag_code /*g_mesh_frag_code*/,
                                          vk::ShaderStageFlagBits::eFragment, "default_mesh_frag");
     ctx.acquireSet(sceneRenderer.fragShader.get().layout(1), sceneLighting.lightTableSet);
+
+    // texture
+    ResourceSystem::load_shader(ctx, "default_texture_preview.vert",
+                                vk::ShaderStageFlagBits::eVertex, g_mesh_vert_bindless_pbr_code);
+    ResourceSystem::load_shader(ctx, "default_texture_preview.frag",
+                                vk::ShaderStageFlagBits::eFragment, g_mesh_frag_bindless_pbr_code);
 #else
     sceneRenderer.vertShader
         = ctx.createShaderModuleFromGlsl(g_mesh_vert_code /*g_mesh_vert_code*/,
@@ -782,13 +869,14 @@ void main()
     sceneRenderer.fragShader
         = ctx.createShaderModuleFromGlsl(g_mesh_frag_code /*g_mesh_frag_code*/,
                                          vk::ShaderStageFlagBits::eFragment, "default_mesh_frag");
-#endif
 
     // texture
     ResourceSystem::load_shader(ctx, "default_texture_preview.vert",
                                 vk::ShaderStageFlagBits::eVertex, g_mesh_vert_bindless_code);
     ResourceSystem::load_shader(ctx, "default_texture_preview.frag",
                                 vk::ShaderStageFlagBits::eFragment, g_mesh_frag_bindless_code);
+#endif
+
 
     sceneRenderer.pointVertShader = ctx.createShaderModuleFromGlsl(
         g_mesh_point_vert_code, vk::ShaderStageFlagBits::eVertex, "default_mesh_point_vert");
@@ -926,13 +1014,17 @@ void main()
     {
       auto &texturePreviewVertShader = ResourceSystem::get_shader("default_texture_preview.vert");
       auto &texturePreviewFragShader = ResourceSystem::get_shader("default_texture_preview.frag");
+#if USE_SCENE_LIGHTING
       ctx.acquireSet(texturePreviewFragShader.layout(2), sceneLighting.lightTableSet);
+#endif
 
       sceneRenderer.bindlessPipeline
           = pipelineBuilder.setShader(texturePreviewFragShader)
                 .setDescriptorSetLayouts({}, true)
                 .addDescriptorSetLayout(ctx.bindlessDescriptorSetLayout, 1)
-                .addDescriptorSetLayout(texturePreviewFragShader.layout(2), 2)
+#if USE_SCENE_LIGHTING
+                .addDescriptorSetLayout(texturePreviewFragShader.layout(2), 2) // layout for sceneLighting.lightTableSet
+#endif
                 .setShader(texturePreviewVertShader)
                 .setDepthCompareOp(SceneEditor::reversedZ ? vk::CompareOp::eGreaterOrEqual
                                                           : vk::CompareOp::eLessOrEqual)
@@ -1881,7 +1973,11 @@ void main()
               /*pipeline layout*/ sceneRenderer.bindlessPipeline.get(),
               /*firstSet*/ 0,
               /*descriptor sets*/
+#if USE_SCENE_LIGHTING
               {sceneRenderData.sceneCameraSet, bindlessSet, sceneLighting.lightTableSet},
+#else
+              {sceneRenderData.sceneCameraSet, bindlessSet},
+#endif
               /*dynamic offset*/ {0, 0}, ctx.dispatcher);
           (*cmd).bindPipeline(vk::PipelineBindPoint::eGraphics,
                               sceneRenderer.bindlessPipeline.get());
