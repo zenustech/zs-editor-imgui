@@ -216,7 +216,7 @@ namespace zs {
       icons_config.MergeMode = true;
       icons_config.PixelSnapH = true;
       icons_config.GlyphOffset = {0.f, iconFontSize / 4};
-      icons_config.GlyphExtraSpacing = {0.f, 0.f};
+      // icons_config.GlyphExtraSpacing = {0.f, 0.f};
       icons_config.GlyphMinAdvanceX = iconFontSize;
       io.Fonts->AddFontFromFileTTF((baseFontDir + FONT_ICON_FILE_NAME_MD).c_str(), iconFontSize,
                                    &icons_config, icons_ranges);
@@ -230,7 +230,7 @@ namespace zs {
       icons_config.MergeMode = true;
       icons_config.PixelSnapH = true;
       icons_config.GlyphOffset = {0, iconFontSize / 6};
-      icons_config.GlyphExtraSpacing = {0.f, 0.f};
+      // icons_config.GlyphExtraSpacing = {0.f, 0.f};
       icons_config.GlyphMinAdvanceX = iconFontSize;
       io.Fonts->AddFontFromFileTTF((baseFontDir + FONT_ICON_FILE_NAME_MSR).c_str(), iconFontSize,
                                    &icons_config, icons_ranges);
