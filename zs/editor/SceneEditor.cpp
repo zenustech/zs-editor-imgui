@@ -1,4 +1,5 @@
 #include "SceneEditor.hpp"
+#include <chrono>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtc/type_ptr.hpp"

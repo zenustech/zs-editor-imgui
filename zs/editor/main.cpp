@@ -17,8 +17,8 @@
 #include "imgui.h"
 #include "interface/details/PyHelper.hpp"
 #include "interface/world/NodeInterface.hpp"
-#include "shader_runtime.h"
-#include "virtual_file_helper.h"
+// #include "shader_runtime.h"
+// #include "virtual_file_helper.h"
 #include "world/system/ResourceSystem.hpp"
 #include "zensim/ZpcReflection.hpp"
 #include "zensim/io/Filesystem.hpp"
@@ -29,7 +29,7 @@
 int main(int argc, char *argv[]) {
   using namespace zs;
 
-  zs::IShaderManager::get().setup_default_virtual_path();
+  // zs::IShaderManager::get().setup_default_virtual_path();
 
   {
     GUIWindow window{{}};
