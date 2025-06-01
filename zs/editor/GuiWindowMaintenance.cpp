@@ -60,7 +60,7 @@ namespace zs {
     const ImVec2 mouse_pos_prev = io.MousePos;
     for (int n = 0; n < platform_io.Viewports.Size; n++) {
       ImGuiViewport *viewport = platform_io.Viewports[n];
-      GLFWwindow *window = (GLFWwindow *)viewport->PlatformHandle;
+      auto window = (GLFWwindow *)viewport->PlatformHandle;
 
       const bool is_window_focused = glfwGetWindowAttrib(window, GLFW_FOCUSED) != 0;
       if (is_window_focused) {
@@ -80,7 +80,7 @@ namespace zs {
           glfwGetCursorPos(window, &mouse_x, &mouse_y);
           if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
             // Single viewport mode: mouse position in client window coordinates
-            // (io.MousePos is (0,0) when the mouse is on the upper-left corner of
+            // (io.MousePos is (0,0) when the mouse is in the upper-left corner of
             // the app window) Multi-viewport mode: mouse position in OS absolute
             // coordinates (io.MousePos is (0,0) when the mouse is on the
             // upper-left of the primary monitor)
@@ -295,7 +295,7 @@ namespace zs {
       swapchain.imageFence(imgId) = swapchain.currentFence();
 
       vk::PipelineStageFlags stages[] = {vk::PipelineStageFlagBits::eColorAttachmentOutput};
-      cmd.waitStage(stages);
+      cmd.waitStage(stages[0]);
       cmd.wait(swapchain.currentImageAcquiredSemaphore());
       cmd.signal(swapchain.currentRenderCompleteSemaphore());
       cmd.submit(swapchain.currentFence(), /*reset fence*/ true,
